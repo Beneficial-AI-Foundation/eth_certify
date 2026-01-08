@@ -8,6 +8,7 @@ On-chain certification of content hashes using Ethereum. Prove that website cont
 - **Website Certification** - Certify website URLs with their content hash
 - **Verification Progress** - Track formal verification progress for projects like [Dalek-Lite](https://beneficial-ai-foundation.github.io/dalek-lite/)
 - **Verification Script** - Verify that current website content matches on-chain certification
+- **Team Support** - Use Gnosis Safe for team certifications from a single address
 
 ## Deployed Contract
 
@@ -20,6 +21,7 @@ On-chain certification of content hashes using Ethereum. Prove that website cont
 ### Prerequisites
 
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) installed
 - A wallet with Sepolia ETH ([get some here](https://cloud.google.com/application/web3/faucet/ethereum/sepolia))
 
 ### Setup
@@ -29,37 +31,75 @@ On-chain certification of content hashes using Ethereum. Prove that website cont
 git clone <repo-url>
 cd certify
 
-# Install dependencies
+# Install Foundry dependencies
 forge install
+
+# Install Python dependencies
+uv sync
 
 # Create your .env file
 cp .env.example .env
-# Edit .env with your private key
+# Edit .env with your private key and RPC URL
+```
+
+### Configuration
+
+Edit `certify.conf` to set the content source and description:
+
+```bash
+# Content Certification Configuration
+# Source can be a URL or local file path
+CERTIFY_SOURCE="https://beneficial-ai-foundation.github.io/dalek-lite/"
+CERTIFY_DESCRIPTION="Dalek-Lite Verification Progress - Formally verifying curve25519-dalek with Verus"
+```
+
+You can also certify local files:
+
+```bash
+CERTIFY_SOURCE="./data/config.json"
+CERTIFY_DESCRIPTION="Configuration file v1.2.0"
+```
+
+Or GitHub workflow artifacts:
+
+```bash
+# Single-file artifact
+CERTIFY_SOURCE="github://owner/repo/artifacts/123456789"
+
+# Multi-file artifact (specify which file)
+CERTIFY_SOURCE="github://owner/repo/artifacts/123456789/results.json"
+CERTIFY_DESCRIPTION="CI verification results"
+```
+
+For GitHub artifacts, set the `GITHUB_TOKEN` environment variable (required for private repos):
+
+```bash
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
 ```
 
 ### Deploy Your Own Contract
 
 ```bash
-./deploy.sh sepolia deploy
+uv run certify-cli deploy --network sepolia
 ```
 
 Copy the deployed address and add it to `.env` as `CERTIFY_ADDRESS`.
 
-### Certify a Website
+### Certify Content
 
 ```bash
-./deploy.sh sepolia certify
+uv run certify-cli certify --network sepolia
 ```
 
 This will:
-1. Fetch the current HTML content from https://beneficial-ai-foundation.github.io/dalek-lite/
+1. Fetch content from the source in `certify.conf` (URL or local file)
 2. Compute its keccak256 hash
 3. Store the certification on-chain with timestamp
 
 ### Verify a Certification
 
 ```bash
-./verify.sh
+uv run certify-cli verify
 ```
 
 This compares the current website content hash with the on-chain certified hash.
@@ -78,6 +118,26 @@ URL:      https://beneficial-ai-foundation.github.io/dalek-lite/
 ═══════════════════════════════════════════════════════════════════
 
   ✅ VERIFIED - Content matches on-chain certification!
+```
+
+## CLI Reference
+
+```bash
+# Deploy contract
+uv run certify-cli deploy --network sepolia
+uv run certify-cli deploy --network anvil
+
+# Certify website (reads URL from certify.conf)
+uv run certify-cli certify --network sepolia
+
+# Verify certification
+uv run certify-cli verify
+uv run certify-cli verify --rpc-url https://custom-rpc.com
+uv run certify-cli verify --contract 0x...
+
+# Show help
+uv run certify-cli --help
+uv run certify-cli deploy --help
 ```
 
 ## Contract API
@@ -159,7 +219,6 @@ cast logs \
   --from-block $(($(cast block-number --rpc-url https://ethereum-sepolia-rpc.publicnode.com) - 10000)) \
   --address 0x125721f8a45bbABC60aDbaaF102a94d9cae59238
 ```
-
 ## How Verification Works
 
 1. **Certification**: The website HTML is fetched and hashed with keccak256. The hash is stored on-chain with the URL, timestamp, and certifier address.
@@ -175,18 +234,121 @@ cast logs \
    - It was certified by a specific Ethereum address
    - The content hash is immutably recorded on-chain
 
+## GitHub Actions Integration
+
+The CLI can be used in GitHub Actions workflows. Environment variables take priority over config files, making it easy to use with GitHub secrets.
+
+### Required Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `PRIVATE_KEY` | Ethereum private key for signing transactions |
+| `SEPOLIA_RPC_URL` | RPC endpoint (Infura, Alchemy, etc.) |
+| `CERTIFY_ADDRESS` | Deployed Certify contract address |
+
+### Optional Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `ETHERSCAN_API_KEY` | For contract verification on deploy |
+| `GITHUB_TOKEN` | Auto-provided, for accessing artifacts |
+
+### Example Workflow
+
+```yaml
+name: Certify Content
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'URL or file to certify'
+        required: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: beneficial-ai-foundation/certify
+          path: certify
+
+      - uses: astral-sh/setup-uv@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install and run
+        working-directory: certify
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          CERTIFY_ADDRESS: ${{ secrets.CERTIFY_ADDRESS }}
+          CERTIFY_SOURCE: ${{ inputs.source }}
+          CERTIFY_DESCRIPTION: "Certified via GitHub Actions"
+        run: |
+          uv sync
+          uv run certify-cli certify --network sepolia
+```
+
+See `.github/workflows/certify.yml.example` for a complete example.
+
 ## Development
 
 ```bash
-# Build
+# Build Solidity contracts
 forge build
 
-# Test
+# Test contracts
 forge test -vvv
 
-# Format
+# Format Solidity
 forge fmt
+
+# Run Python linting
+uv run ruff check certify_cli/
+
+# Run type checking
+uv run mypy certify_cli/
 ```
+
+## Project Structure
+
+```
+certify/
+├── certify_cli/           # Python CLI package
+│   ├── __init__.py
+│   ├── __main__.py        # CLI entry point
+│   ├── config.py          # Configuration dataclasses
+│   ├── deploy.py          # Deploy & certify commands
+│   ├── foundry.py         # Forge/cast wrappers
+│   └── verify.py          # Verification logic
+├── script/                # Foundry deploy scripts
+│   └── Certify.s.sol
+├── src/                   # Solidity contracts
+│   └── Certify.sol
+├── test/                  # Contract tests
+│   └── Certify.t.sol
+├── .github/workflows/     # Example GitHub Actions
+├── certify.conf           # Content source configuration
+├── pyproject.toml         # Python project config
+└── foundry.toml           # Foundry config
+```
+
+## Environment Variables
+
+All configuration can be set via environment variables (for CI/CD) or config files (for local dev).
+
+| Variable | File | Description |
+|----------|------|-------------|
+| `PRIVATE_KEY` | `.env` | Ethereum private key |
+| `SEPOLIA_RPC_URL` | `.env` | Sepolia RPC endpoint |
+| `CERTIFY_ADDRESS` | `.env` | Deployed contract address |
+| `ETHERSCAN_API_KEY` | `.env` | Etherscan API key (optional) |
+| `CERTIFY_SOURCE` | `certify.conf` | URL, file path, or `github://` artifact |
+| `CERTIFY_DESCRIPTION` | `certify.conf` | Certification description |
+| `GITHUB_TOKEN` | (env only) | For GitHub artifact access |
+
+**Priority:** Environment variables override config file values.
 
 ## License
 
@@ -194,4 +356,4 @@ MIT
 
 ---
 
-Generated by Claude Opus 4.5
+_Generated by Claude Opus 4.5_
