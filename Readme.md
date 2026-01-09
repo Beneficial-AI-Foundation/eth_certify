@@ -76,6 +76,7 @@ CERTIFY_DESCRIPTION="My certification"
 
 | Topic | Document |
 |-------|----------|
+| Trust model & address roles | [doc/trust_model.md](doc/trust_model.md) |
 | Mainnet deployment guide | [doc/mainnet_deployment.md](doc/mainnet_deployment.md) |
 | Gnosis Safe integration | [doc/safe_integration.md](doc/safe_integration.md) |
 
