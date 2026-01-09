@@ -9,6 +9,7 @@ import os
 
 class Network(Enum):
     """Supported blockchain networks."""
+    MAINNET = "mainnet"
     SEPOLIA = "sepolia"
     ANVIL = "anvil"
     LOCAL = "local"
@@ -16,6 +17,11 @@ class Network(Enum):
     @property
     def rpc_url(self) -> str:
         """Get the RPC URL for this network."""
+        if self == Network.MAINNET:
+            url = os.getenv("MAINNET_RPC_URL")
+            if not url:
+                raise ValueError("MAINNET_RPC_URL must be set (env var or .env file)")
+            return url
         if self == Network.SEPOLIA:
             url = os.getenv("SEPOLIA_RPC_URL")
             if not url:
@@ -36,8 +42,11 @@ class EnvConfig:
     Priority: Environment variables > .env file
     This allows GitHub Actions secrets to override local .env values.
     """
+    mainnet_rpc_url: Optional[str]
     sepolia_rpc_url: Optional[str]
-    private_key: str
+    mainnet_private_key: Optional[str]
+    sepolia_private_key: Optional[str]
+    private_key: Optional[str]  # Fallback for backwards compatibility
     etherscan_api_key: Optional[str]
     certify_address: Optional[str]
 
@@ -53,18 +62,66 @@ class EnvConfig:
         if env_path.exists():
             file_vars = _parse_env_file(env_path)
 
+        mainnet_private_key = _get_env("MAINNET_PRIVATE_KEY", file_vars)
+        sepolia_private_key = _get_env("SEPOLIA_PRIVATE_KEY", file_vars)
         private_key = _get_env("PRIVATE_KEY", file_vars)
-        if not private_key:
+
+        # At least one private key must be set
+        if not any([mainnet_private_key, sepolia_private_key, private_key]):
             raise ValueError(
-                "PRIVATE_KEY must be set (via environment variable or .env file)"
+                "At least one private key must be set: "
+                "MAINNET_PRIVATE_KEY, SEPOLIA_PRIVATE_KEY, or PRIVATE_KEY"
             )
 
         return cls(
+            mainnet_rpc_url=_get_env("MAINNET_RPC_URL", file_vars),
             sepolia_rpc_url=_get_env("SEPOLIA_RPC_URL", file_vars),
+            mainnet_private_key=mainnet_private_key,
+            sepolia_private_key=sepolia_private_key,
             private_key=private_key,
             etherscan_api_key=_get_env("ETHERSCAN_API_KEY", file_vars),
             certify_address=_get_env("CERTIFY_ADDRESS", file_vars),
         )
+
+    def get_private_key(self, network: "Network") -> str:
+        """Get the private key for the specified network.
+        
+        Falls back to PRIVATE_KEY if network-specific key is not set.
+        """
+        if network == Network.MAINNET:
+            key = self.mainnet_private_key or self.private_key
+            if not key:
+                raise ValueError(
+                    "MAINNET_PRIVATE_KEY or PRIVATE_KEY must be set for mainnet"
+                )
+            return key
+        elif network == Network.SEPOLIA:
+            key = self.sepolia_private_key or self.private_key
+            if not key:
+                raise ValueError(
+                    "SEPOLIA_PRIVATE_KEY or PRIVATE_KEY must be set for Sepolia"
+                )
+            return key
+        else:
+            # Local/Anvil - use any available key
+            key = self.private_key or self.sepolia_private_key or self.mainnet_private_key
+            if not key:
+                raise ValueError("No private key configured")
+            return key
+
+    def get_rpc_url(self, network: "Network") -> str:
+        """Get the RPC URL for the specified network."""
+        if network == Network.MAINNET:
+            if not self.mainnet_rpc_url:
+                raise ValueError("MAINNET_RPC_URL must be set in .env")
+            return self.mainnet_rpc_url
+        elif network == Network.SEPOLIA:
+            if not self.sepolia_rpc_url:
+                raise ValueError("SEPOLIA_RPC_URL must be set in .env")
+            return self.sepolia_rpc_url
+        else:
+            # Local/Anvil
+            return "http://127.0.0.1:8545"
 
 
 @dataclass(frozen=True)

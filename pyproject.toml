@@ -6,6 +6,8 @@ readme = "Readme.md"
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27.0",
+    "safe-eth-py>=6.0.0",
+    "web3>=6.0.0",
 ]
 
 [project.scripts]

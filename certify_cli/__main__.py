@@ -22,7 +22,7 @@ def main() -> int:
     deploy_parser.add_argument(
         "--network",
         type=str,
-        choices=["sepolia", "anvil", "local"],
+        choices=["mainnet", "sepolia", "anvil", "local"],
         default="sepolia",
         help="Network to deploy to (default: sepolia)",
     )
@@ -32,9 +32,20 @@ def main() -> int:
     certify_parser.add_argument(
         "--network",
         type=str,
-        choices=["sepolia", "anvil", "local"],
+        choices=["mainnet", "sepolia", "anvil", "local"],
         default="sepolia",
         help="Network to use (default: sepolia)",
+    )
+    certify_parser.add_argument(
+        "--safe",
+        type=str,
+        metavar="ADDRESS",
+        help="Gnosis Safe address - generates transaction data for Safe UI instead of broadcasting directly",
+    )
+    certify_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="When used with --safe, programmatically execute the transaction (requires owner private key)",
     )
 
     # Verify command
@@ -88,7 +99,18 @@ def _handle_certify(args: argparse.Namespace) -> int:
     certify_config = CertifyConfig.load()
     network = _parse_network(args.network)
 
-    result = certify_content(env, certify_config, network)
+    # Validate --execute requires --safe
+    if args.execute and not args.safe:
+        print("Error: --execute requires --safe ADDRESS")
+        return 1
+
+    result = certify_content(
+        env, 
+        certify_config, 
+        network, 
+        safe_address=args.safe,
+        safe_execute=args.execute,
+    )
     print(result.message)
     return 0 if result.success else 1
 
@@ -116,6 +138,7 @@ def _handle_verify(args: argparse.Namespace) -> int:
 def _parse_network(network_str: str) -> Network:
     """Parse network string to Network enum."""
     mapping = {
+        "mainnet": Network.MAINNET,
         "sepolia": Network.SEPOLIA,
         "anvil": Network.ANVIL,
         "local": Network.LOCAL,
