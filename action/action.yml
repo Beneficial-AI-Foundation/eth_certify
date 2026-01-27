@@ -2,7 +2,7 @@
 # Records content hashes on Ethereum for tamper-evident certification
 #
 # Usage:
-#   - uses: beneficial-ai-foundation/certify/action@v1
+#   - uses: Beneficial-AI-Foundation/eth_certify/action@main
 #     with:
 #       source: ./path/to/file.json
 #       description: "My certification"
@@ -10,6 +10,7 @@
 #       rpc-url: ${{ secrets.SEPOLIA_RPC_URL }}
 #       private-key: ${{ secrets.PRIVATE_KEY }}
 #       certify-address: ${{ vars.CERTIFY_ADDRESS }}
+#       token: ${{ secrets.CERTIFY_REPO_PAT }}  # Required for private repo
 
 name: 'BAIF Certify'
 description: 'Certify content on Ethereum by recording its hash on-chain'
@@ -52,6 +53,10 @@ inputs:
     description: 'Etherscan API key (optional, for contract verification)'
     required: false
     default: ''
+  token:
+    description: 'GitHub token for checking out the certify repo (required for private repos, use a PAT with repo access)'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   tx-hash:
@@ -70,7 +75,8 @@ runs:
     - name: Checkout certify repository
       uses: actions/checkout@v4
       with:
-        repository: beneficial-ai-foundation/certify
+        repository: Beneficial-AI-Foundation/eth_certify
+        token: ${{ inputs.token }}
         path: _certify_action
         submodules: recursive
 

@@ -14,7 +14,7 @@ A GitHub Action to certify content on Ethereum by recording its keccak256 hash o
 ### Basic Usage (Sepolia)
 
 ```yaml
-- uses: beneficial-ai-foundation/certify/action@v1
+- uses: Beneficial-AI-Foundation/eth_certify/action@v1
   with:
     source: ./build/output.json
     description: "Build artifact for ${{ github.sha }}"
@@ -27,7 +27,7 @@ A GitHub Action to certify content on Ethereum by recording its keccak256 hash o
 ### Mainnet with Gnosis Safe
 
 ```yaml
-- uses: beneficial-ai-foundation/certify/action@v1
+- uses: Beneficial-AI-Foundation/eth_certify/action@v1
   with:
     source: ./results.json
     description: "Verification results"
@@ -41,7 +41,7 @@ A GitHub Action to certify content on Ethereum by recording its keccak256 hash o
 ### Using Outputs
 
 ```yaml
-- uses: beneficial-ai-foundation/certify/action@v1
+- uses: Beneficial-AI-Foundation/eth_certify/action@v1
   id: certify
   with:
     source: ./data.json
@@ -105,7 +105,7 @@ jobs:
 
       - name: Certify build artifact
         id: certify
-        uses: beneficial-ai-foundation/certify/action@v1
+        uses: Beneficial-AI-Foundation/eth_certify/action@v1
         with:
           source: ./build-manifest.json
           description: "Build manifest for ${{ github.sha }}"
@@ -132,7 +132,7 @@ This action pairs well with the [probe-verus action](https://github.com/benefici
   with:
     project-path: ./my-verus-crate
 
-- uses: beneficial-ai-foundation/certify/action@v1
+- uses: Beneficial-AI-Foundation/eth_certify/action@v1
   with:
     source: ${{ steps.verify.outputs.results-file }}
     description: "Verus verification for ${{ github.sha }}"

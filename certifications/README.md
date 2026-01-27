@@ -27,7 +27,7 @@ certifications/
 After certification, add this to your project's README:
 
 ```markdown
-[![BAIF Certified](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/beneficial-ai-foundation/certify/main/certifications/YOUR-PROJECT-ID/badge.json)](https://github.com/beneficial-ai-foundation/certify/blob/main/certifications/YOUR-PROJECT-ID/history.json)
+[![BAIF Certified](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Beneficial-AI-Foundation/eth_certify/main/certifications/YOUR-PROJECT-ID/badge.json)](https://github.com/Beneficial-AI-Foundation/eth_certify/blob/main/certifications/YOUR-PROJECT-ID/history.json)
 ```
 
 ## Verifying Certifications
