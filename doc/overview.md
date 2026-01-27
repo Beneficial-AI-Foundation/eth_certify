@@ -1,4 +1,4 @@
-# BAIF Certification System - Accomplishments
+# BAIF Certification System - Overview
 
 <div align="center">
 
@@ -22,7 +22,13 @@
 
 ---
 
-This document summarizes the work completed to build a comprehensive on-chain certification system for formally verified Rust code using Verus.
+> **⚠️ Proof of Concept (PoC)**
+> 
+> This system is a proof of concept demonstrating the feasibility of on-chain certification for formally verified code. It is functional but intended primarily for exploration and validation of the approach. Production use should consider additional security audits and operational hardening.
+
+---
+
+This document provides a technical overview of the on-chain certification system for formally verified Rust code using Verus.
 
 ## Overview
 
@@ -54,6 +60,8 @@ A reusable composite GitHub Action that runs Verus formal verification on Rust p
 - `atoms-file`: Path to atoms JSON
 - `verified-count`: Number of successfully verified functions
 - `total-functions`: Total number of verifiable functions
+- `verus-version`: Verus version used for verification
+- `rust-version`: Rust toolchain version used
 
 **Usage:**
 ```yaml
@@ -127,7 +135,11 @@ Allows BAIF to certify any external Verus project without requiring changes to t
 
 **Certification Artifacts:**
 - `certifications/{project-id}/badge.json` - Shields.io compatible badge data
-- `certifications/{project-id}/history.json` - Full certification history
+- `certifications/{project-id}/badge.svg` - Custom SVG badge
+- `certifications/{project-id}/history.json` - Full certification history with toolchain info
+- `certifications/{project-id}/results/` - Stored verification results
+  - `{timestamp}.json` - Timestamped results for each certification
+  - `latest.json` - Most recent verification results
 
 ---
 
@@ -195,6 +207,57 @@ We provide two badge options:
 - **Shields.io**: Convenient if you want dynamic styling options or don't want to regenerate SVGs
 
 Both options are generated automatically by the certification workflow.
+
+---
+
+## Certification Data
+
+### history.json Structure
+
+Each certification is recorded in `history.json` with full traceability:
+
+```json
+{
+  "certifications": [
+    {
+      "timestamp": "2026-01-27T09:49:01Z",
+      "ref": "main",
+      "network": "sepolia",
+      "tx_hash": "0x...",
+      "content_hash": "0x...",
+      "etherscan_url": "https://sepolia.etherscan.io/tx/0x...",
+      "verified": 70,
+      "total": 70,
+      "verus_version": "0.2026.01.10.531beb1",
+      "rust_version": "1.92.0",
+      "results_file": "results/2026-01-27T09-49-01Z.json"
+    }
+  ]
+}
+```
+
+**Fields:**
+- `timestamp`: ISO 8601 timestamp of certification
+- `ref`: Git ref (branch/tag/commit) that was certified
+- `network`: Ethereum network (`mainnet` or `sepolia`)
+- `tx_hash`: Transaction hash of the on-chain certification
+- `content_hash`: Keccak256 hash of the verification results
+- `etherscan_url`: Link to transaction on Etherscan
+- `verified`/`total`: Verification statistics
+- `verus_version`: Verus toolchain version used
+- `rust_version`: Rust compiler version used
+- `results_file`: Path to stored verification results
+
+### Results Storage
+
+Full verification results are stored for each certification:
+- `results/{timestamp}.json` - Immutable record per certification
+- `results/latest.json` - Always points to most recent results
+
+This enables:
+- Full reproducibility of verification
+- Historical comparison of results across versions
+- Audit trail of what was verified
 
 ---
 
@@ -278,14 +341,14 @@ Added `mkdir -p` to ensure output directory exists before `probe-verus` writes f
 │  📤 Outputs: tx_hash=0x..., content_hash=0x...                           │
 ╰───────────────────────────────────────────────────────────────────────────╯
                                         │
-                          ┌─────────────┴─────────────┐
-                          ▼                           ▼
-              ┌───────────────────────┐   ┌───────────────────────┐
-              │   📁 badge.json       │   │   📁 history.json     │
-              │   (shields.io data)   │   │   (all certifications)│
-              └───────────────────────┘   └───────────────────────┘
-                          │                           │
-                          └─────────────┬─────────────┘
+                          ┌─────────────┼─────────────┐
+                          ▼             ▼             ▼
+              ┌─────────────────┐ ┌─────────────┐ ┌─────────────────┐
+              │  📁 badge.svg   │ │ 📁 history  │ │  📁 results/    │
+              │  📁 badge.json  │ │    .json    │ │  └─ latest.json │
+              └─────────────────┘ └─────────────┘ └─────────────────┘
+                          │             │             │
+                          └─────────────┼─────────────┘
                                         ▼
                     ╔═══════════════════════════════════════════╗
                     ║              🏷️  README Badge              ║
@@ -317,26 +380,29 @@ eth_certify/
 ├── certifications/
 │   ├── README.md           # Registry overview
 │   └── {project-id}/       # Per-project certification data
-│       ├── badge.json
-│       └── history.json
+│       ├── badge.json      # Shields.io compatible data
+│       ├── badge.svg       # Custom SVG badge
+│       ├── history.json    # Certification history
+│       ├── README.md       # Project-specific instructions
+│       └── results/        # Stored verification results
+│           ├── {timestamp}.json
+│           └── latest.json
 ├── certify_cli/            # Python CLI for certification
 │   ├── __main__.py
 │   ├── config.py
 │   ├── deploy.py
 │   ├── foundry.py
+│   ├── registry.py         # Badge & history generation
 │   ├── safe.py
 │   └── verify.py
 ├── doc/
-│   ├── accomplishments.md  # This file
-│   ├── badge.md            # Badge documentation
+│   ├── overview.md         # This file
 │   └── ...
-├── scripts/
-│   └── update-badge.sh     # Badge generation script
 ├── src/
 │   └── Certify.sol         # Solidity contract
 └── .github/workflows/
     ├── certify-external.yml           # Certify external projects
-    ├── test-action.yml                # Test workflow
+    ├── ci.yml                         # Linting & tests
     └── verify-certify-badge.yml.example
 ```
 
@@ -349,12 +415,3 @@ eth_certify/
 | [pmemlog_with_callgraph](https://github.com/Beneficial-AI-Foundation/pmemlog_with_callgraph) | ![BAIF Certified](https://img.shields.io/badge/BAIF_Certified-72%2F72_verified-brightgreen?style=flat&logo=ethereum&logoColor=white) | 100% verified | [Etherscan](https://etherscan.io) |
 
 ---
-
-## Next Steps
-
-Potential future enhancements:
-- [ ] Automatic re-certification on upstream changes
-- [ ] Certification verification API/website
-- [ ] Support for other formal verification tools (beyond Verus)
-- [ ] Certification revocation mechanism
-- [ ] Multi-chain support (L2s for lower gas costs)
