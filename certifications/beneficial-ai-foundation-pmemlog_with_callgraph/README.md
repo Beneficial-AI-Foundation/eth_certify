@@ -16,12 +16,12 @@ Add this to your project's README:
 ```
 
 **Option 2: Shields.io Endpoint**
-                                                                                                                                                                                ```markdown
+```markdown
 [![BAIF Certified](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Beneficial-AI-Foundation/eth_certify/main/certifications/beneficial-ai-foundation-pmemlog_with_callgraph/badge.json)](https://github.com/Beneficial-AI-Foundation/eth_certify/blob/main/certifications/beneficial-ai-foundation-pmemlog_with_callgraph/history.json)
 ```
 
 ## Latest Certification
-                                                                    
+
 - **Verified**: 70/70 functions
 - **Network**: mainnet
 - **Transaction**: [0x4ed73827e2a42d887fad41772323857ffc1e295e75f25a7d58b5ff85cd30cac9](https://etherscan.io/tx/0x4ed73827e2a42d887fad41772323857ffc1e295e75f25a7d58b5ff85cd30cac9)

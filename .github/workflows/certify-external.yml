@@ -224,49 +224,43 @@ jobs:
           MESSAGE_WIDTH=85
           TOTAL_WIDTH=$((LABEL_WIDTH + MESSAGE_WIDTH))
           
-          cat > "$CERT_DIR/badge.svg" << SVGEOF
-          <svg xmlns="http://www.w3.org/2000/svg" width="${TOTAL_WIDTH}" height="28" role="img" aria-label="BAIF Certified: ${VERIFIED}/${TOTAL} verified">
-            <title>BAIF Certified: ${VERIFIED}/${TOTAL} verified</title>
-            <defs>
-              <linearGradient id="bg" x2="0" y2="100%">
-                <stop offset="0" stop-color="#555" stop-opacity=".1"/>
-                <stop offset="1" stop-opacity=".1"/>
-              </linearGradient>
-              <clipPath id="r">
-                <rect width="${TOTAL_WIDTH}" height="28" rx="6" fill="#fff"/>
-              </clipPath>
-            </defs>
-            <g clip-path="url(#r)">
-              <rect width="${LABEL_WIDTH}" height="28" fill="#333"/>
-              <rect x="${LABEL_WIDTH}" width="${MESSAGE_WIDTH}" height="28" fill="${BG_COLOR}"/>
-              <rect width="${TOTAL_WIDTH}" height="28" fill="url(#bg)"/>
-            </g>
-            <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11" font-weight="bold">
-              <g transform="translate(12, 7)">
-                <svg width="14" height="14" viewBox="0 0 256 417" preserveAspectRatio="xMidYMid">
-                  <path fill="#fff" fill-opacity="0.9" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
-                  <path fill="#fff" fill-opacity="0.7" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
-                  <path fill="#fff" fill-opacity="0.9" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.601L256 236.587z"/>
-                  <path fill="#fff" fill-opacity="0.7" d="M127.962 416.905v-104.72L0 236.585z"/>
-                </svg>
-              </g>
-              <text x="55" y="18" fill="#fff">BAIF Certified</text>
-              <text x="137" y="18" fill="#fff">${VERIFIED}/${TOTAL} verified</text>
-            </g>
-          SVGEOF
-          
-          # Add checkmark for 100% verified
+          # Generate SVG badge (no nested svg - use scaled g for logo)
           if [ "$PERCENT" -eq 100 ]; then
-            # Remove closing </svg> and add checkmark
-            sed -i 's|</svg>||' "$CERT_DIR/badge.svg"
-            cat >> "$CERT_DIR/badge.svg" << CHECKEOF
-            <g transform="translate(162, 8)">
-              <circle cx="5" cy="5" r="5" fill="#fff" fill-opacity="0.3"/>
-              <path d="M2 5l2 2 4-4" stroke="#fff" stroke-width="1.5" fill="none"/>
-            </g>
-          </svg>
-          CHECKEOF
+            CHECKMARK='<g transform="translate(162, 8)"><circle cx="5" cy="5" r="5" fill="#fff" fill-opacity="0.3"/><path d="M2 5l2 2 4-4" stroke="#fff" stroke-width="1.5" fill="none"/></g>'
+          else
+            CHECKMARK=""
           fi
+          
+          cat > "$CERT_DIR/badge.svg" << SVGEOF
+<svg xmlns="http://www.w3.org/2000/svg" width="${TOTAL_WIDTH}" height="28" role="img" aria-label="BAIF Certified: ${VERIFIED}/${TOTAL} verified">
+  <title>BAIF Certified: ${VERIFIED}/${TOTAL} verified</title>
+  <defs>
+    <linearGradient id="bg" x2="0" y2="100%">
+      <stop offset="0" stop-color="#555" stop-opacity=".1"/>
+      <stop offset="1" stop-opacity=".1"/>
+    </linearGradient>
+    <clipPath id="r">
+      <rect width="${TOTAL_WIDTH}" height="28" rx="6" fill="#fff"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="${LABEL_WIDTH}" height="28" fill="#333"/>
+    <rect x="${LABEL_WIDTH}" width="${MESSAGE_WIDTH}" height="28" fill="${BG_COLOR}"/>
+    <rect width="${TOTAL_WIDTH}" height="28" fill="url(#bg)"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11" font-weight="bold">
+    <g transform="translate(8, 5) scale(0.043)">
+      <path fill="#fff" fill-opacity="0.9" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
+      <path fill="#fff" fill-opacity="0.7" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
+      <path fill="#fff" fill-opacity="0.9" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.601L256 236.587z"/>
+      <path fill="#fff" fill-opacity="0.7" d="M127.962 416.905v-104.72L0 236.585z"/>
+    </g>
+    <text x="55" y="18" fill="#fff">BAIF Certified</text>
+    <text x="137" y="18" fill="#fff">${VERIFIED}/${TOTAL} verified</text>
+  </g>
+  ${CHECKMARK}
+</svg>
+SVGEOF
           
           # Create/update certification record
           TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
