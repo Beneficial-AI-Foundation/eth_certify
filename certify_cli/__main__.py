@@ -29,7 +29,9 @@ def main() -> int:
     )
 
     # Certify command
-    certify_parser = subparsers.add_parser("certify", help="Certify content on-chain (URL or file)")
+    certify_parser = subparsers.add_parser(
+        "certify", help="Certify content on-chain (URL or file)"
+    )
     certify_parser.add_argument(
         "--network",
         type=str,
@@ -50,7 +52,9 @@ def main() -> int:
     )
 
     # Verify command
-    verify_parser = subparsers.add_parser("verify", help="Verify content against on-chain certification")
+    verify_parser = subparsers.add_parser(
+        "verify", help="Verify content against on-chain certification"
+    )
     verify_parser.add_argument(
         "--rpc-url",
         type=str,
@@ -186,9 +190,9 @@ def _handle_certify(args: argparse.Namespace) -> int:
         return 1
 
     result = certify_content(
-        env, 
-        certify_config, 
-        network, 
+        env,
+        certify_config,
+        network,
         safe_address=args.safe,
         safe_execute=args.execute,
     )
@@ -249,4 +253,3 @@ def _parse_network(network_str: str) -> Network:
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -13,6 +13,7 @@ import httpx
 @dataclass(frozen=True)
 class ForgeResult:
     """Result of a forge command execution."""
+
     success: bool
     stdout: str
     stderr: str
@@ -74,14 +75,19 @@ def cast_logs(
 ) -> Optional[str]:
     """Query event logs from the blockchain."""
     try:
-        output = run_cast([
-            "logs",
-            "--rpc-url", rpc_url,
-            "--from-block", str(from_block),
-            "--address", address,
-            event_sig,
-            topic1,
-        ])
+        output = run_cast(
+            [
+                "logs",
+                "--rpc-url",
+                rpc_url,
+                "--from-block",
+                str(from_block),
+                "--address",
+                address,
+                event_sig,
+                topic1,
+            ]
+        )
         return output if output else None
     except subprocess.CalledProcessError:
         return None
@@ -89,13 +95,13 @@ def cast_logs(
 
 def fetch_content(source: str, filename: Optional[str] = None) -> bytes:
     """Fetch content from a URL, GitHub artifact, or local file path.
-    
+
     Supported source formats:
     - Local file: ./path/to/file.json or /absolute/path
     - URL: https://example.com/file.json
     - GitHub raw: https://raw.githubusercontent.com/owner/repo/branch/path
     - GitHub artifact: github://owner/repo/artifacts/artifact_id[/filename.json]
-    
+
     Args:
         source: The source path, URL, or GitHub artifact reference
         filename: For artifacts containing multiple files, specify which file to extract
@@ -109,6 +115,7 @@ def fetch_content(source: str, filename: Optional[str] = None) -> bytes:
     else:
         # Treat as local file path
         from pathlib import Path
+
         path = Path(source).expanduser().resolve()
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
@@ -117,9 +124,9 @@ def fetch_content(source: str, filename: Optional[str] = None) -> bytes:
 
 def _fetch_github_artifact(source: str, filename: Optional[str] = None) -> bytes:
     """Fetch a GitHub Actions workflow artifact.
-    
+
     Format: github://owner/repo/artifacts/artifact_id[/filename]
-    
+
     Requires GITHUB_TOKEN environment variable for private repos.
     """
     # Parse: github://owner/repo/artifacts/artifact_id[/filename]
@@ -129,15 +136,15 @@ def _fetch_github_artifact(source: str, filename: Optional[str] = None) -> bytes
             f"Invalid GitHub artifact URL: {source}\n"
             "Expected format: github://owner/repo/artifacts/artifact_id[/filename]"
         )
-    
+
     owner = parts[0]
     repo = parts[1]
     artifact_id = parts[3]
-    
+
     # Filename can be in the URL or passed as argument
     if len(parts) > 4:
         filename = "/".join(parts[4:])
-    
+
     # Get GitHub token
     token = os.getenv("GITHUB_TOKEN")
     headers = {}
@@ -145,24 +152,24 @@ def _fetch_github_artifact(source: str, filename: Optional[str] = None) -> bytes
         headers["Authorization"] = f"Bearer {token}"
     headers["Accept"] = "application/vnd.github+json"
     headers["X-GitHub-Api-Version"] = "2022-11-28"
-    
+
     # Download the artifact zip
     url = f"https://api.github.com/repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip"
-    
+
     response = httpx.get(url, headers=headers, follow_redirects=True)
     if response.status_code == 401:
         raise PermissionError(
             "GitHub authentication required. Set GITHUB_TOKEN environment variable."
         )
     response.raise_for_status()
-    
+
     # Artifacts are always zipped - extract the content
     with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
         names = zf.namelist()
-        
+
         if not names:
             raise ValueError(f"Artifact {artifact_id} is empty")
-        
+
         if filename:
             # Extract specific file
             if filename not in names:
@@ -190,4 +197,3 @@ def compute_content_hash(source: str, filename: Optional[str] = None) -> str:
 def _is_url(source: str) -> bool:
     """Check if source is a URL or a file path."""
     return source.startswith(("http://", "https://"))
-

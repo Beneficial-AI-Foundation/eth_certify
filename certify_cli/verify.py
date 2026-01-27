@@ -27,6 +27,7 @@ DEFAULT_BLOCK_LOOKBACK = 50000
 @dataclass
 class VerifyResult:
     """Result of a verification operation."""
+
     verified: bool
     url: str
     on_chain_hash: Optional[str]
@@ -175,11 +176,13 @@ def _parse_logs(logs: str) -> Optional[OnChainCertification]:
     topics_section = re.search(r"topics:\s*\[(.*?)\]", logs, re.DOTALL | re.IGNORECASE)
     if not topics_section:
         # Fallback: try plain format without brackets
-        topics_section = re.search(r"topics:\s*\n((?:\s+0x[a-f0-9]{64}\s*\n)+)", logs, re.IGNORECASE)
-    
+        topics_section = re.search(
+            r"topics:\s*\n((?:\s+0x[a-f0-9]{64}\s*\n)+)", logs, re.IGNORECASE
+        )
+
     if not topics_section:
         return None
-    
+
     # Extract all 64-char hex values from the topics section
     topics = re.findall(r"0x[a-f0-9]{64}", topics_section.group(1), re.IGNORECASE)
 
@@ -222,4 +225,3 @@ def _parse_logs(logs: str) -> Optional[OnChainCertification]:
         block_number=block_number,
         transaction_hash=tx_hash,
     )
-

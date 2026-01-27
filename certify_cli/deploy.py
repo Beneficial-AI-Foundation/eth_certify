@@ -10,6 +10,7 @@ from .foundry import compute_content_hash, run_cast, run_forge
 @dataclass
 class DeployResult:
     """Result of a deploy operation."""
+
     success: bool
     message: str
 
@@ -25,10 +26,13 @@ def deploy_contract(
     rpc_url = env.get_rpc_url(network)
 
     args = [
-        "script", "script/Certify.s.sol:DeployCertify",
+        "script",
+        "script/Certify.s.sol:DeployCertify",
         "--broadcast",
-        "--rpc-url", rpc_url,
-        "--private-key", private_key,
+        "--rpc-url",
+        rpc_url,
+        "--private-key",
+        private_key,
     ]
 
     # Add verification flags for Etherscan-supported networks if API key is available
@@ -54,6 +58,7 @@ def deploy_contract(
 @dataclass
 class CertifyResult:
     """Result of a certify operation."""
+
     success: bool
     url: str
     content_hash: str
@@ -69,10 +74,10 @@ def certify_content(
     safe_execute: bool = False,
 ) -> CertifyResult:
     """Certify content (from URL or file) on-chain.
-    
-    If safe_address is provided without safe_execute, generates transaction 
+
+    If safe_address is provided without safe_execute, generates transaction
     data for Safe UI.
-    
+
     If safe_address is provided with safe_execute=True, programmatically
     signs and executes the transaction via the Safe.
     """
@@ -105,15 +110,19 @@ def certify_content(
     rpc_url = env.get_rpc_url(network)
 
     args = [
-        "script", "script/Certify.s.sol:CertifyWebsiteContent",
-        "--sig", "run(address,string,bytes32,string)",
+        "script",
+        "script/Certify.s.sol:CertifyWebsiteContent",
+        "--sig",
+        "run(address,string,bytes32,string)",
         env.certify_address,
         source,
         content_hash,
         certify_config.description,
         "--broadcast",
-        "--rpc-url", rpc_url,
-        "--private-key", private_key,
+        "--rpc-url",
+        rpc_url,
+        "--private-key",
+        private_key,
     ]
 
     result = run_forge(args)
@@ -122,7 +131,7 @@ def certify_content(
         # Extract transaction hash from broadcast file
         tx_hash = _extract_tx_hash_from_broadcast(network)
         tx_info = f"\n   Tx Hash: {tx_hash}" if tx_hash else ""
-        
+
         return CertifyResult(
             success=True,
             url=source,
@@ -149,33 +158,33 @@ def _extract_tx_hash_from_broadcast(network: Network) -> Optional[str]:
     """Extract transaction hash from Foundry broadcast file."""
     import json
     from pathlib import Path
-    
+
     chain_ids = {
         Network.MAINNET: 1,
         Network.SEPOLIA: 11155111,
         Network.ANVIL: 31337,
         Network.LOCAL: 31337,
     }
-    
+
     chain_id = chain_ids.get(network)
     if not chain_id:
         return None
-    
+
     broadcast_file = Path(f"broadcast/Certify.s.sol/{chain_id}/run-latest.json")
     if not broadcast_file.exists():
         return None
-    
+
     try:
         with open(broadcast_file) as f:
             data = json.load(f)
-        
+
         # Get the first transaction hash
         transactions = data.get("transactions", [])
         if transactions:
             return transactions[0].get("hash")
     except (json.JSONDecodeError, KeyError, IndexError):
         pass
-    
+
     return None
 
 
@@ -188,7 +197,7 @@ def _certify_via_safe(
     execute: bool = False,
 ) -> CertifyResult:
     """Certify via Gnosis Safe.
-    
+
     If execute=True, programmatically sign and execute the transaction.
     Otherwise, generate transaction data for manual submission via Safe UI.
     """
@@ -209,13 +218,15 @@ def _certify_via_safe(
         )
 
     # Generate transaction data for manual submission
-    calldata = run_cast([
-        "calldata",
-        "certifyWebsite(string,bytes32,string)",
-        source,
-        content_hash,
-        description,
-    ])
+    calldata = run_cast(
+        [
+            "calldata",
+            "certifyWebsite(string,bytes32,string)",
+            source,
+            content_hash,
+            description,
+        ]
+    )
 
     # Determine the network name for Safe URL
     network_slug = "eth" if network == Network.MAINNET else "sep"
@@ -344,4 +355,3 @@ def _execute_safe_certification(
         contract_address=contract_address,
         message=result.message,
     )
-

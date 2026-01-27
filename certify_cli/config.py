@@ -9,6 +9,7 @@ import os
 
 class Network(Enum):
     """Supported blockchain networks."""
+
     MAINNET = "mainnet"
     SEPOLIA = "sepolia"
     ANVIL = "anvil"
@@ -30,7 +31,9 @@ class Network(Enum):
         return "http://127.0.0.1:8545"
 
 
-def _get_env(key: str, file_vars: dict[str, str], default: Optional[str] = None) -> Optional[str]:
+def _get_env(
+    key: str, file_vars: dict[str, str], default: Optional[str] = None
+) -> Optional[str]:
     """Get a value from environment variable first, then file, then default."""
     return os.getenv(key) or file_vars.get(key) or default
 
@@ -38,10 +41,11 @@ def _get_env(key: str, file_vars: dict[str, str], default: Optional[str] = None)
 @dataclass(frozen=True)
 class EnvConfig:
     """Environment configuration from env vars or .env file.
-    
+
     Priority: Environment variables > .env file
     This allows GitHub Actions secrets to override local .env values.
     """
+
     mainnet_rpc_url: Optional[str]
     sepolia_rpc_url: Optional[str]
     mainnet_private_key: Optional[str]
@@ -53,7 +57,7 @@ class EnvConfig:
     @classmethod
     def load(cls, env_path: Path = Path(".env")) -> "EnvConfig":
         """Load configuration from environment variables and optionally .env file.
-        
+
         Environment variables take priority over .env file values.
         The .env file is optional (for CI/CD environments).
         """
@@ -85,7 +89,7 @@ class EnvConfig:
 
     def get_private_key(self, network: "Network") -> str:
         """Get the private key for the specified network.
-        
+
         Falls back to PRIVATE_KEY if network-specific key is not set.
         """
         if network == Network.MAINNET:
@@ -104,7 +108,9 @@ class EnvConfig:
             return key
         else:
             # Local/Anvil - use any available key
-            key = self.private_key or self.sepolia_private_key or self.mainnet_private_key
+            key = (
+                self.private_key or self.sepolia_private_key or self.mainnet_private_key
+            )
             if not key:
                 raise ValueError("No private key configured")
             return key
@@ -127,16 +133,17 @@ class EnvConfig:
 @dataclass(frozen=True)
 class CertifyConfig:
     """Certification configuration from env vars or certify.conf file.
-    
+
     Priority: Environment variables > certify.conf file
     """
+
     source: str  # URL, local file path, or GitHub artifact
     description: str
 
     @classmethod
     def load(cls, config_path: Path = Path("certify.conf")) -> "CertifyConfig":
         """Load configuration from environment variables and optionally certify.conf.
-        
+
         Environment variables take priority over file values.
         """
         # Load config file if it exists (optional)
@@ -145,7 +152,9 @@ class CertifyConfig:
             file_vars = _parse_env_file(config_path)
 
         # Support both CERTIFY_SOURCE (new) and CERTIFY_URL (legacy)
-        source = _get_env("CERTIFY_SOURCE", file_vars) or _get_env("CERTIFY_URL", file_vars)
+        source = _get_env("CERTIFY_SOURCE", file_vars) or _get_env(
+            "CERTIFY_URL", file_vars
+        )
         if not source:
             raise ValueError(
                 "CERTIFY_SOURCE must be set (via environment variable or certify.conf)"
@@ -153,7 +162,9 @@ class CertifyConfig:
 
         return cls(
             source=source,
-            description=_get_env("CERTIFY_DESCRIPTION", file_vars, "Content certification"),
+            description=_get_env(
+                "CERTIFY_DESCRIPTION", file_vars, "Content certification"
+            ),
         )
 
     @property
@@ -179,6 +190,7 @@ class CertifyConfig:
 @dataclass(frozen=True)
 class OnChainCertification:
     """Represents a certification record found on-chain."""
+
     content_hash: str
     certifier_address: str
     timestamp: Optional[int]
@@ -200,4 +212,3 @@ def _parse_env_file(path: Path) -> dict[str, str]:
                 value = value.strip().strip('"').strip("'")
                 result[key.strip()] = value
     return result
-

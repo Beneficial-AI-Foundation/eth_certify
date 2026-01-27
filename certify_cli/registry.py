@@ -11,6 +11,7 @@ from typing import Optional
 @dataclass
 class CertificationEntry:
     """A single certification record."""
+
     timestamp: str
     ref: str
     network: str
@@ -27,6 +28,7 @@ class CertificationEntry:
 @dataclass
 class RegistryUpdateResult:
     """Result of a registry update operation."""
+
     success: bool
     message: str
     cert_dir: Path
@@ -48,14 +50,14 @@ def update_registry(
 ) -> RegistryUpdateResult:
     """
     Update the certification registry with a new certification.
-    
+
     Creates/updates:
     - badge.json (shields.io endpoint)
     - badge.svg (custom SVG badge)
     - history.json (certification history)
     - README.md (badge instructions)
     - results/<timestamp>.json (verification results, if provided)
-    
+
     Args:
         cert_id: Unique certification ID (e.g., "owner-repo")
         repo_path: Repository path (e.g., "Owner/Repo")
@@ -69,48 +71,48 @@ def update_registry(
         verus_version: Verus version used for verification
         rust_version: Rust toolchain version used
         results_file: Path to verification results JSON to store
-        
+
     Returns:
         RegistryUpdateResult with success status and message
     """
     cert_dir = base_dir / cert_id
     cert_dir.mkdir(parents=True, exist_ok=True)
-    
+
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     timestamp_safe = timestamp.replace(":", "-")  # Safe for filenames
-    
+
     try:
         # Calculate percentage for badge color
         percent = (verified * 100 // total) if total > 0 else 0
-        
+
         # Determine Etherscan URL
         if network == "mainnet":
             etherscan_url = f"https://etherscan.io/tx/{tx_hash}"
         else:
             etherscan_url = f"https://{network}.etherscan.io/tx/{tx_hash}"
-        
+
         # Store results file if provided
         stored_results_path = None
         if results_file:
             results_dir = cert_dir / "results"
             results_dir.mkdir(exist_ok=True)
-            
+
             # Copy to timestamped file
             dest_file = results_dir / f"{timestamp_safe}.json"
             shutil.copy2(results_file, dest_file)
-            
+
             # Also copy to latest.json
             latest_file = results_dir / "latest.json"
             shutil.copy2(results_file, latest_file)
-            
+
             stored_results_path = f"results/{timestamp_safe}.json"
-        
+
         # 1. Create badge.json for shields.io
         _create_badge_json(cert_dir, verified, total, percent)
-        
+
         # 2. Create badge.svg
         _create_badge_svg(cert_dir, verified, total, percent)
-        
+
         # 3. Update history.json
         entry = CertificationEntry(
             timestamp=timestamp,
@@ -126,16 +128,16 @@ def update_registry(
             results_file=stored_results_path,
         )
         _update_history(cert_dir, entry)
-        
+
         # 4. Create README.md
         _create_readme(cert_dir, cert_id, repo_path, entry)
-        
+
         return RegistryUpdateResult(
             success=True,
             message=f"✅ Registry updated: {cert_dir}",
             cert_dir=cert_dir,
         )
-        
+
     except Exception as e:
         return RegistryUpdateResult(
             success=False,
@@ -176,7 +178,7 @@ def _create_badge_json(cert_dir: Path, verified: int, total: int, percent: int) 
         "namedLogo": "ethereum",
         "logoColor": "white",
     }
-    
+
     badge_file = cert_dir / "badge.json"
     with open(badge_file, "w") as f:
         json.dump(badge_data, f, indent=2)
@@ -188,18 +190,18 @@ def _create_badge_svg(cert_dir: Path, verified: int, total: int, percent: int) -
     label_width = 110  # Wider for better spacing
     message_width = 95
     total_width = label_width + message_width
-    
+
     # Checkmark position based on total width
     checkmark_x = total_width - 18
-    
+
     # Checkmark for 100% verified
     checkmark = ""
     if percent == 100:
-        checkmark = f'''<g transform="translate({checkmark_x}, 8)">
+        checkmark = f"""<g transform="translate({checkmark_x}, 8)">
     <circle cx="5" cy="5" r="5" fill="#fff" fill-opacity="0.3"/>
     <path d="M2 5l2 2 4-4" stroke="#fff" stroke-width="1.5" fill="none"/>
-  </g>'''
-    
+  </g>"""
+
     svg_content = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{total_width}" height="28" role="img" aria-label="BAIF Certified: {verified}/{total} verified">
   <title>BAIF Certified: {verified}/{total} verified</title>
   <defs>
@@ -229,7 +231,7 @@ def _create_badge_svg(cert_dir: Path, verified: int, total: int, percent: int) -
   {checkmark}
 </svg>
 '''
-    
+
     svg_file = cert_dir / "badge.svg"
     with open(svg_file, "w") as f:
         f.write(svg_content)
@@ -238,13 +240,13 @@ def _create_badge_svg(cert_dir: Path, verified: int, total: int, percent: int) -
 def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
     """Update certification history JSON."""
     history_file = cert_dir / "history.json"
-    
+
     if history_file.exists():
         with open(history_file) as f:
             history = json.load(f)
     else:
         history = {"certifications": []}
-    
+
     # Add new entry at the beginning
     new_entry = {
         "timestamp": entry.timestamp,
@@ -256,7 +258,7 @@ def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
         "verified": entry.verified,
         "total": entry.total,
     }
-    
+
     # Add optional fields if present
     if entry.verus_version:
         new_entry["verus_version"] = entry.verus_version
@@ -264,9 +266,9 @@ def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
         new_entry["rust_version"] = entry.rust_version
     if entry.results_file:
         new_entry["results_file"] = entry.results_file
-    
+
     history["certifications"].insert(0, new_entry)
-    
+
     with open(history_file, "w") as f:
         json.dump(history, f, indent=2)
 
@@ -286,13 +288,13 @@ def _create_readme(
             toolchain_info += f"- **Verus**: {entry.verus_version}\n"
         if entry.rust_version:
             toolchain_info += f"- **Rust**: {entry.rust_version}\n"
-    
+
     # Build results link if available
     results_link = ""
     if entry.results_file:
         results_link = f"\n- **Results**: [{entry.results_file}]({entry.results_file})"
-    
-    readme_content = f'''# BAIF Certification: {repo_path}
+
+    readme_content = f"""# BAIF Certification: {repo_path}
 
 <p align="center">
   <a href="https://github.com/Beneficial-AI-Foundation/eth_certify/blob/main/certifications/{cert_id}/history.json">
@@ -324,8 +326,8 @@ Add this to your project's README:
 ## Verification History
 
 See [history.json](history.json) for all certifications.
-'''
-    
+"""
+
     readme_file = cert_dir / "README.md"
     with open(readme_file, "w") as f:
         f.write(readme_content)
