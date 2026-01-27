@@ -1,0 +1,308 @@
+# Certify External Verus Projects
+#
+# This workflow allows BAIF to certify Verus projects outside the organization.
+# It's triggered manually with a GitHub repository URL.
+#
+# The certification badge is hosted in THIS repo (certify), so external projects
+# just need to add a badge URL pointing here - no write access required.
+
+name: Certify External Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'GitHub repository URL (e.g., https://github.com/owner/repo)'
+        required: true
+        type: string
+      project_path:
+        description: 'Path to Verus project within repo (default: . for root)'
+        required: false
+        default: '.'
+        type: string
+      package:
+        description: 'Package name for workspace projects (optional)'
+        required: false
+        default: ''
+        type: string
+      ref:
+        description: 'Git ref to certify (branch, tag, or commit SHA)'
+        required: false
+        default: 'main'
+        type: string
+      network:
+        description: 'Ethereum network for certification'
+        required: false
+        default: 'mainnet'
+        type: choice
+        options:
+          - mainnet
+          - sepolia
+
+permissions:
+  contents: write  # To update certifications directory
+
+jobs:
+  certify-external:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse repository info
+        id: repo
+        run: |
+          REPO_URL="${{ inputs.repo_url }}"
+          
+          # Extract owner/repo from URL
+          # Handles: https://github.com/owner/repo or https://github.com/owner/repo.git
+          REPO_PATH=$(echo "$REPO_URL" | sed -E 's|https://github.com/||' | sed 's|\.git$||' | sed 's|/$||')
+          OWNER=$(echo "$REPO_PATH" | cut -d'/' -f1)
+          REPO=$(echo "$REPO_PATH" | cut -d'/' -f2)
+          
+          # Create a safe directory name for storing certification
+          CERT_ID=$(echo "$REPO_PATH" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+          
+          echo "repo_path=$REPO_PATH" >> $GITHUB_OUTPUT
+          echo "owner=$OWNER" >> $GITHUB_OUTPUT
+          echo "repo=$REPO" >> $GITHUB_OUTPUT
+          echo "cert_id=$CERT_ID" >> $GITHUB_OUTPUT
+          
+          echo "Repository: $OWNER/$REPO"
+          echo "Certification ID: $CERT_ID"
+
+      - name: Checkout certify repo
+        uses: actions/checkout@v4
+        with:
+          path: certify
+
+      - name: Checkout target project
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.repo.outputs.repo_path }}
+          ref: ${{ inputs.ref }}
+          path: target
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1: Run Verus Verification
+      # ═══════════════════════════════════════════════════════════════
+      - name: Run Verus verification
+        uses: beneficial-ai-foundation/probe-verus/action@v1
+        id: verify
+        with:
+          project-path: target/${{ inputs.project_path }}
+          package: ${{ inputs.package }}
+          output-dir: ./output
+
+      - name: Verification summary
+        run: |
+          echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository**: ${{ steps.repo.outputs.repo_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ref**: ${{ inputs.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Verified**: ${{ steps.verify.outputs.verified-count }} / ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 2: Certify on Ethereum
+      # ═══════════════════════════════════════════════════════════════
+      - name: Setup certify environment
+        working-directory: certify
+        run: |
+          # Create certify.conf
+          cat > certify.conf << EOF
+          CERTIFY_SOURCE="$(realpath ../output/results.json)"
+          CERTIFY_DESCRIPTION="BAIF Certification: ${{ steps.repo.outputs.repo_path }}@${{ inputs.ref }} - ${{ steps.verify.outputs.verified-count }}/${{ steps.verify.outputs.total-functions }} verified"
+          EOF
+          
+          cat certify.conf
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install certify dependencies
+        working-directory: certify
+        run: uv sync
+
+      - name: Certify on ${{ inputs.network }}
+        id: certify
+        working-directory: certify
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          MAINNET_PRIVATE_KEY: ${{ secrets.MAINNET_PRIVATE_KEY }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          CERTIFY_ADDRESS: ${{ inputs.network == 'mainnet' && vars.MAINNET_CERTIFIER_ADDRESS || vars.SEPOLIA_CERTIFIER_ADDRESS }}
+        run: |
+          NETWORK="${{ inputs.network }}"
+          
+          # Build command
+          CMD="uv run python3 -m certify_cli certify --network $NETWORK"
+          
+          # Add Safe for mainnet
+          if [ "$NETWORK" = "mainnet" ]; then
+            CMD="$CMD --safe ${{ vars.MAINNET_SAFE_ADDRESS }} --execute"
+          fi
+          
+          echo "Running: $CMD"
+          
+          set +e
+          OUTPUT=$($CMD 2>&1)
+          EXIT_CODE=$?
+          set -e
+          
+          echo "$OUTPUT"
+          
+          # Extract outputs
+          TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*0x[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*0x/0x/')
+          CONTENT_HASH=$(echo "$OUTPUT" | grep -Eio 'Content Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
+          
+          echo "tx_hash=$TX_HASH" >> $GITHUB_OUTPUT
+          echo "content_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
+          
+          # Build Etherscan URL
+          if [ "$NETWORK" = "mainnet" ]; then
+            echo "etherscan_url=https://etherscan.io/tx/$TX_HASH" >> $GITHUB_OUTPUT
+          else
+            echo "etherscan_url=https://sepolia.etherscan.io/tx/$TX_HASH" >> $GITHUB_OUTPUT
+          fi
+          
+          if [ -z "$TX_HASH" ]; then
+            echo "::error::Certification failed - no transaction hash"
+            exit 1
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 3: Update Certification Registry
+      # ═══════════════════════════════════════════════════════════════
+      - name: Update certification registry
+        working-directory: certify
+        env:
+          CERT_ID: ${{ steps.repo.outputs.cert_id }}
+          REPO_PATH: ${{ steps.repo.outputs.repo_path }}
+          VERIFIED: ${{ steps.verify.outputs.verified-count }}
+          TOTAL: ${{ steps.verify.outputs.total-functions }}
+          TX_HASH: ${{ steps.certify.outputs.tx_hash }}
+          CONTENT_HASH: ${{ steps.certify.outputs.content_hash }}
+          ETHERSCAN_URL: ${{ steps.certify.outputs.etherscan_url }}
+          REF: ${{ inputs.ref }}
+          NETWORK: ${{ inputs.network }}
+        run: |
+          CERT_DIR="certifications/$CERT_ID"
+          mkdir -p "$CERT_DIR"
+          
+          # Determine badge color
+          PERCENT=$((VERIFIED * 100 / TOTAL))
+          if [ "$PERCENT" -ge 90 ]; then COLOR="brightgreen"
+          elif [ "$PERCENT" -ge 70 ]; then COLOR="green"
+          elif [ "$PERCENT" -ge 50 ]; then COLOR="yellow"
+          else COLOR="orange"
+          fi
+          
+          # Create badge JSON for shields.io
+          cat > "$CERT_DIR/badge.json" << EOF
+          {
+            "schemaVersion": 1,
+            "label": "BAIF Certified",
+            "message": "${VERIFIED}/${TOTAL} verified",
+            "color": "${COLOR}",
+            "namedLogo": "ethereum",
+            "logoColor": "white"
+          }
+          EOF
+          
+          # Create/update certification record
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          # Read existing history or create new
+          HISTORY_FILE="$CERT_DIR/history.json"
+          if [ -f "$HISTORY_FILE" ]; then
+            EXISTING=$(cat "$HISTORY_FILE")
+          else
+            EXISTING='{"certifications":[]}'
+          fi
+          
+          # Add new certification to history
+          NEW_ENTRY=$(jq -n \
+            --arg timestamp "$TIMESTAMP" \
+            --arg ref "$REF" \
+            --arg network "$NETWORK" \
+            --arg tx_hash "$TX_HASH" \
+            --arg content_hash "$CONTENT_HASH" \
+            --arg etherscan_url "$ETHERSCAN_URL" \
+            --argjson verified "$VERIFIED" \
+            --argjson total "$TOTAL" \
+            '{
+              timestamp: $timestamp,
+              ref: $ref,
+              network: $network,
+              tx_hash: $tx_hash,
+              content_hash: $content_hash,
+              etherscan_url: $etherscan_url,
+              verified: $verified,
+              total: $total
+            }')
+          
+          echo "$EXISTING" | jq --argjson new "$NEW_ENTRY" '.certifications = [$new] + .certifications' > "$HISTORY_FILE"
+          
+          # Create info file with badge instructions
+          cat > "$CERT_DIR/README.md" << EOF
+          # BAIF Certification: $REPO_PATH
+
+          ## Badge
+
+          Add this to your README:
+
+          \`\`\`markdown
+          [![BAIF Certified](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/beneficial-ai-foundation/certify/main/certifications/${CERT_ID}/badge.json)](https://github.com/beneficial-ai-foundation/certify/blob/main/certifications/${CERT_ID}/history.json)
+          \`\`\`
+
+          ## Latest Certification
+
+          - **Verified**: ${VERIFIED}/${TOTAL} functions
+          - **Network**: ${NETWORK}
+          - **Transaction**: [${TX_HASH}](${ETHERSCAN_URL})
+          - **Content Hash**: \`${CONTENT_HASH}\`
+
+          ## Verification History
+
+          See [history.json](history.json) for all certifications.
+          EOF
+          
+          echo "=== Certification files created ==="
+          ls -la "$CERT_DIR/"
+
+      - name: Commit certification
+        working-directory: certify
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add certifications/
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "cert: ${{ steps.repo.outputs.repo_path }}@${{ inputs.ref }} (${{ steps.verify.outputs.verified-count }}/${{ steps.verify.outputs.total-functions }})"
+            git push
+            echo "✅ Certification committed"
+          else
+            echo "No changes to commit"
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 4: Summary
+      # ═══════════════════════════════════════════════════════════════
+      - name: Final summary
+        run: |
+          CERT_ID="${{ steps.repo.outputs.cert_id }}"
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Certification Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Transaction**: [${{ steps.certify.outputs.tx_hash }}](${{ steps.certify.outputs.etherscan_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Badge for ${{ steps.repo.outputs.repo_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Add this to the project README:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`markdown" >> $GITHUB_STEP_SUMMARY
+          echo "[![BAIF Certified](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/beneficial-ai-foundation/certify/main/certifications/${CERT_ID}/badge.json)](https://github.com/beneficial-ai-foundation/certify/blob/main/certifications/${CERT_ID}/history.json)" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
