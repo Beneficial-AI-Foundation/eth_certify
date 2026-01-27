@@ -1,0 +1,422 @@
+{
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_ib_update()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 781,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<u64>#untrusted_setup()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1433,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/axiom_bytes_uncorrupted()": {
+    "code-path": "src/pmemspec_t.rs",
+    "code-line": 68,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/WriteRestrictedPersistentMemory<PM>#new()": {
+    "code-path": "src/pmemspec_t.rs",
+    "code-line": 256,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_not_between()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 197,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_equal_converse()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 295,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_match()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 98,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_correct()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1053,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_eq()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1082,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#update_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1317,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_metadata_bytes_eq()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 331,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_between()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 163,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_subsubrange_equality_forall()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 984,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_index_equality()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 955,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_inactive_header_update_view_crash()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 584,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_single_write_crash()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1089,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/main_t/&InfiniteLogImpl<PM>#InfiniteLogImpl<u64>#read()": {
+    "code-path": "src/main_t.rs",
+    "code-line": 232,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_addition_when_bounded()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 230,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/&WriteRestrictedPersistentMemory<Perm,/PM>#WriteRestrictedPersistentMemory<PM>#get_pm_ref()": {
+    "code-path": "src/pmemspec_t.rs",
+    "code-line": 267,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/main_t/&mut/InfiniteLogImpl<PM>#InfiniteLogImpl<u64>#advance_head()": {
+    "code-path": "src/main_t.rs",
+    "code-line": 190,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_wrapped_len()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 263,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/main_t/TrustedPermission<spec_fn(AbstractInfiniteLogState>#new()": {
+    "code-path": "src/main_t.rs",
+    "code-line": 51,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/metadata_to_bytes()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 266,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_difference_equal()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 243,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/&mut/WriteRestrictedPersistentMemory<Perm,/PM>#WriteRestrictedPersistentMemory<u64>#write()": {
+    "code-path": "src/pmemspec_t.rs",
+    "code-line": 278,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_different_order()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 99,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/main_t/InfiniteLogImpl<u64>#setup()": {
+    "code-path": "src/main_t.rs",
+    "code-line": 97,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_incorruptible_bool_unchanged()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1023,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/bytes_to_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 208,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_read()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1954,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_split_into_bytes()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 149,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<&PM>#read_incorruptible_boolean()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1285,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_auto_basics()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 8,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_different_order_alt()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 131,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_same_order()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 41,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_subsubrange_equality()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 970,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_inactive_header_update_view()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 537,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_bytes_combine_into_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 126,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_subtract()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 332,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_advance_head()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1826,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_seq_addition()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 176,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/pmemmock_t/VolatileMemoryMockingPersistentMemory<u64>#new()": {
+    "code-path": "src/pmemmock_t.rs",
+    "code-line": 13,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_crc_correct()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1036,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/header_to_bytes()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 227,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/crc_and_metadata_bytes_to_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 295,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_data_write_is_safe()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 379,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#append_no_wrap()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1698,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_equal()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 283,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mul_div_equal()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 324,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<u64>#addr_logical_to_physical()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1173,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_data_update_view_crash()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 498,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/axiom_corruption_detecting_boolean()": {
+    "code-path": "src/pmemspec_t.rs",
+    "code-line": 96,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_data_update_view()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 458,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#append_wrap()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1755,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_u64_bytes_eq()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1075,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_headers_unchanged()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1007,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_ib_update_effect_on_committed()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 632,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_same_permissions()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 89,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_not_equal()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 303,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/bytes_to_metadata()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 249,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_same_log_state()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 894,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_pm_state_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1108,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/main_t/&mut/InfiniteLogImpl<PM>#InfiniteLogImpl<&Vec<u8>>#append()": {
+    "code-path": "src/main_t.rs",
+    "code-line": 149,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_get_head_and_tail()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 2063,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/bytes_crc()": {
+    "code-path": "src/pmemspec_t.rs",
+    "code-line": 40,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/main_t/&InfiniteLogImpl<PM>#InfiniteLogImpl<Result<(u64,/u64,/u64),/InfiniteLogErr>>#get_head_and_tail()": {
+    "code-path": "src/main_t.rs",
+    "code-line": 272,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<Result<UntrustedLogImpl,/InfiniteLogErr>\nwhere\n////Perm:/CheckPermission<Seq<u8>>,\n////PM:/PersistentMemory,>#untrusted_start()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1494,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/main_t/InfiniteLogImpl<u64>#start()": {
+    "code-path": "src/main_t.rs",
+    "code-line": 119,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_same_order_alt()": {
+    "code-path": "src/math_v.rs",
+    "code-line": 71,
+    "verified": true,
+    "status": "success"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_append()": {
+    "code-path": "src/logimpl_v.rs",
+    "code-line": 1581,
+    "verified": true,
+    "status": "success"
+  }
+}

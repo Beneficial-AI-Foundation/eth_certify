@@ -24,8 +24,13 @@ Add this to your project's README:
 
 - **Verified**: 70/70 functions
 - **Network**: sepolia
-- **Transaction**: [0x86ce12822d1437e902554d5d4e4931e1eee4711d71aa32254dcc7fde46df21d3](https://sepolia.etherscan.io/tx/0x86ce12822d1437e902554d5d4e4931e1eee4711d71aa32254dcc7fde46df21d3)
-- **Content Hash**: `0x4ceb274c8a805332ea9f9f08e9e9d1d54636c7977bb92bcf3438c66f6f8cf91d`
+- **Transaction**: [0xd0ffa00c567274cd2275732fb50d64e9621c80594b4958f316e991d177a1b473](https://sepolia.etherscan.io/tx/0xd0ffa00c567274cd2275732fb50d64e9621c80594b4958f316e991d177a1b473)
+- **Content Hash**: `0x9ea4513fb060defc2cc60d3aa7c8becbcb831a394ac65b8fde4f339858eb9eb9`
+- **Results**: [results/2026-01-27T09-49-01Z.json](results/2026-01-27T09-49-01Z.json)
+
+### Toolchain
+- **Verus**: 0.2026.01.10.531beb1
+- **Rust**: 1.92.0
 
 ## Verification History
 
