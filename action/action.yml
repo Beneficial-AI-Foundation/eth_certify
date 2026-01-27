@@ -1,0 +1,183 @@
+# BAIF Certify Action
+# Records content hashes on Ethereum for tamper-evident certification
+#
+# Usage:
+#   - uses: beneficial-ai-foundation/certify/action@v1
+#     with:
+#       source: ./path/to/file.json
+#       description: "My certification"
+#       network: sepolia
+#       rpc-url: ${{ secrets.SEPOLIA_RPC_URL }}
+#       private-key: ${{ secrets.PRIVATE_KEY }}
+#       certify-address: ${{ vars.CERTIFY_ADDRESS }}
+
+name: 'BAIF Certify'
+description: 'Certify content on Ethereum by recording its hash on-chain'
+author: 'Beneficial AI Foundation'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  source:
+    description: 'Path to file, URL, or github:// artifact to certify'
+    required: true
+  description:
+    description: 'Description for the certification record'
+    required: false
+    default: 'Content certification'
+  network:
+    description: 'Target network: mainnet, sepolia, or anvil'
+    required: false
+    default: 'sepolia'
+  rpc-url:
+    description: 'RPC endpoint URL for the target network'
+    required: true
+  private-key:
+    description: 'Private key for signing transactions (or Safe owner key if using Safe)'
+    required: true
+  certify-address:
+    description: 'Address of the deployed Certify contract'
+    required: true
+  safe-address:
+    description: 'Gnosis Safe address (optional - enables multisig certification)'
+    required: false
+    default: ''
+  safe-execute:
+    description: 'If using Safe, execute transaction programmatically (automatic for 1-of-N Safes; proposes for multi-sig)'
+    required: false
+    default: 'true'
+  etherscan-api-key:
+    description: 'Etherscan API key (optional, for contract verification)'
+    required: false
+    default: ''
+
+outputs:
+  tx-hash:
+    description: 'Transaction hash of the certification'
+    value: ${{ steps.certify.outputs.tx_hash }}
+  content-hash:
+    description: 'Keccak256 hash of the certified content'
+    value: ${{ steps.certify.outputs.content_hash }}
+  etherscan-url:
+    description: 'Etherscan URL for the transaction'
+    value: ${{ steps.certify.outputs.etherscan_url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout certify repository
+      uses: actions/checkout@v4
+      with:
+        repository: beneficial-ai-foundation/certify
+        path: _certify_action
+        submodules: recursive
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: 'latest'
+
+    - name: Install Foundry
+      uses: foundry-rs/foundry-toolchain@v1
+
+    - name: Install certify dependencies
+      shell: bash
+      working-directory: _certify_action
+      run: uv sync
+
+    - name: Create certify.conf
+      shell: bash
+      working-directory: _certify_action
+      run: |
+        # Resolve source path - if it's a relative file path, make it absolute
+        SOURCE="${{ inputs.source }}"
+        if [[ "$SOURCE" != http://* ]] && [[ "$SOURCE" != https://* ]] && [[ "$SOURCE" != github://* ]]; then
+          # It's a file path - resolve relative to the workflow workspace
+          if [[ "$SOURCE" != /* ]]; then
+            # Relative path - make absolute relative to parent directory (user's checkout)
+            SOURCE="$(cd .. && realpath "$SOURCE")"
+          fi
+        fi
+        
+        cat > certify.conf << EOF
+        CERTIFY_SOURCE="${SOURCE}"
+        CERTIFY_DESCRIPTION="${{ inputs.description }}"
+        EOF
+        
+        echo "=== certify.conf ==="
+        cat certify.conf
+
+    - name: Run certification
+      id: certify
+      shell: bash
+      working-directory: _certify_action
+      env:
+        # Network-agnostic env vars - the CLI will use the right one based on --network
+        MAINNET_RPC_URL: ${{ inputs.rpc-url }}
+        SEPOLIA_RPC_URL: ${{ inputs.rpc-url }}
+        MAINNET_PRIVATE_KEY: ${{ inputs.private-key }}
+        SEPOLIA_PRIVATE_KEY: ${{ inputs.private-key }}
+        PRIVATE_KEY: ${{ inputs.private-key }}
+        CERTIFY_ADDRESS: ${{ inputs.certify-address }}
+        ETHERSCAN_API_KEY: ${{ inputs.etherscan-api-key }}
+      run: |
+        # Build command
+        CMD="uv run python3 -m certify_cli certify --network ${{ inputs.network }}"
+        
+        # Add Safe options if provided
+        if [ -n "${{ inputs.safe-address }}" ]; then
+          CMD="$CMD --safe ${{ inputs.safe-address }}"
+          if [ "${{ inputs.safe-execute }}" = "true" ]; then
+            CMD="$CMD --execute"
+          fi
+        fi
+        
+        echo "Running: $CMD"
+        
+        # Execute and capture output
+        set +e
+        OUTPUT=$($CMD 2>&1)
+        EXIT_CODE=$?
+        set -e
+        
+        echo "$OUTPUT"
+        
+        # Extract transaction hash (format: "Tx Hash: 0x...")
+        TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*0x[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*0x([a-fA-F0-9]{64})$/0x\1/')
+        
+        # Extract content hash (format: "Content Hash: 0x..." or "Content hash: 0x...")
+        CONTENT_HASH=$(echo "$OUTPUT" | grep -Eio 'Content Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
+        
+        # Build Etherscan URL
+        ETHERSCAN_URL=""
+        if [ -n "$TX_HASH" ]; then
+          case "${{ inputs.network }}" in
+            mainnet)
+              ETHERSCAN_URL="https://etherscan.io/tx/${TX_HASH}"
+              ;;
+            sepolia)
+              ETHERSCAN_URL="https://sepolia.etherscan.io/tx/${TX_HASH}"
+              ;;
+          esac
+        fi
+        
+        # Set outputs
+        echo "tx_hash=${TX_HASH}" >> $GITHUB_OUTPUT
+        echo "content_hash=${CONTENT_HASH}" >> $GITHUB_OUTPUT
+        echo "etherscan_url=${ETHERSCAN_URL}" >> $GITHUB_OUTPUT
+        
+        # Log results
+        echo ""
+        echo "=== Certification Results ==="
+        echo "Content Hash: ${CONTENT_HASH:-'(not captured)'}"
+        echo "Tx Hash: ${TX_HASH:-'(not captured)'}"
+        echo "Etherscan: ${ETHERSCAN_URL:-'(n/a)'}"
+        
+        exit $EXIT_CODE
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: rm -rf _certify_action

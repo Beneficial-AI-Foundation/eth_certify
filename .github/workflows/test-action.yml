@@ -1,0 +1,142 @@
+# Test workflow for the certify action
+# Run locally with: act -j test-action --secret-file .env.act -W .github/workflows/test-action.yml
+#
+# Create .env.act with:
+#   SEPOLIA_RPC_URL=https://...
+#   SEPOLIA_PRIVATE_KEY=0x...
+#   CERTIFY_ADDRESS=0x...
+
+name: Test Certify Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Network to test on'
+        required: false
+        default: 'anvil'
+        type: choice
+        options:
+          - anvil
+          - sepolia
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Create test file to certify
+        run: |
+          echo '{"test": true, "timestamp": "'$(date -Iseconds)'", "commit": "${{ github.sha }}"}' > test-content.json
+          echo "=== Test content ==="
+          cat test-content.json
+
+      # Install Foundry for Anvil testing
+      - name: Install Foundry
+        if: inputs.network == 'anvil' || github.event_name == 'push'
+        uses: foundry-rs/foundry-toolchain@v1
+
+      # Test with Anvil (local chain - no real transactions)
+      - name: Start Anvil (local testnet)
+        if: inputs.network == 'anvil' || github.event_name == 'push'
+        run: |
+          # Start Anvil in background
+          anvil --host 0.0.0.0 &
+          sleep 3
+          echo "Anvil started"
+          # Verify it's running
+          curl -s http://127.0.0.1:8545 -X POST -H "Content-Type: application/json" \
+            --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+
+      - name: Deploy Certify contract to Anvil
+        if: inputs.network == 'anvil' || github.event_name == 'push'
+        id: deploy
+        run: |
+          # Use Anvil's default funded account
+          PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+          
+          # Deploy contract
+          OUTPUT=$(forge script script/Certify.s.sol:DeployCertify \
+            --broadcast \
+            --rpc-url http://127.0.0.1:8545 \
+            --private-key $PRIVATE_KEY 2>&1)
+          
+          echo "$OUTPUT"
+          
+          # Extract deployed address from broadcast
+          ADDRESS=$(cat broadcast/Certify.s.sol/31337/run-latest.json | jq -r '.transactions[0].contractAddress')
+          echo "certify_address=$ADDRESS" >> $GITHUB_OUTPUT
+          echo "Deployed Certify to: $ADDRESS"
+
+      # For local testing with act, test CLI directly (action checkout won't work without GitHub access)
+      - name: Test certify CLI (Anvil - local act testing)
+        if: (inputs.network == 'anvil' || github.event_name == 'push') && env.ACT == 'true'
+        id: certify-anvil-cli
+        env:
+          PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+          CERTIFY_ADDRESS: ${{ steps.deploy.outputs.certify_address }}
+        run: |
+          # Create certify.conf for test
+          cat > certify.conf << EOF
+          CERTIFY_SOURCE="$(realpath test-content.json)"
+          CERTIFY_DESCRIPTION="Test certification from act"
+          EOF
+          
+          # Install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          
+          # Install deps and run
+          uv sync
+          OUTPUT=$(uv run python3 -m certify_cli certify --network anvil 2>&1)
+          echo "$OUTPUT"
+          
+          # Extract outputs
+          CONTENT_HASH=$(echo "$OUTPUT" | grep -Eio 'Content Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
+          echo "content_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
+          echo "tx_hash=local-anvil-test" >> $GITHUB_OUTPUT
+
+      # For GitHub Actions, test the full action
+      - name: Test certify action (Anvil)
+        if: (inputs.network == 'anvil' || github.event_name == 'push') && env.ACT != 'true'
+        uses: ./action
+        id: certify-anvil
+        with:
+          source: ./test-content.json
+          description: "Test certification from CI"
+          network: anvil
+          rpc-url: http://127.0.0.1:8545
+          private-key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+          certify-address: ${{ steps.deploy.outputs.certify_address }}
+
+      - name: Test certify action (Sepolia)
+        if: inputs.network == 'sepolia'
+        uses: ./action
+        id: certify-sepolia
+        with:
+          source: ./test-content.json
+          description: "Test certification from CI"
+          network: sepolia
+          rpc-url: ${{ secrets.SEPOLIA_RPC_URL }}
+          private-key: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          certify-address: ${{ secrets.CERTIFY_ADDRESS }}
+
+      - name: Verify outputs
+        run: |
+          echo "=== Action Outputs ==="
+          # Handle both CLI test (act) and action test (GitHub)
+          CONTENT_HASH="${{ steps.certify-anvil-cli.outputs.content_hash || steps.certify-anvil.outputs.content-hash || steps.certify-sepolia.outputs.content-hash }}"
+          TX_HASH="${{ steps.certify-anvil-cli.outputs.tx_hash || steps.certify-anvil.outputs.tx-hash || steps.certify-sepolia.outputs.tx-hash }}"
+          
+          echo "Content Hash: $CONTENT_HASH"
+          echo "Tx Hash: $TX_HASH"
+          echo "Etherscan URL: ${{ steps.certify-anvil.outputs.etherscan-url || steps.certify-sepolia.outputs.etherscan-url }}"
+          
+          # Verify content hash is not empty
+          if [ -z "$CONTENT_HASH" ]; then
+            echo "ERROR: content-hash output is empty!"
+            exit 1
+          fi
+          echo "✅ Content hash captured successfully"
