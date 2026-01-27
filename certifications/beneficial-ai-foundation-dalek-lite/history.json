@@ -1,0 +1,17 @@
+{
+  "certifications": [
+    {
+      "timestamp": "2026-01-27T10:13:14Z",
+      "ref": "main",
+      "network": "sepolia",
+      "tx_hash": "0xc5ece31d4a68931a87e907c4ced54025073a79a91e4e05d299378f6cffa274b7",
+      "content_hash": "0x4321bf207c998e7313a2b26b3e3d8ca537bca4554bd4ebc2c0cda6911281cbcf",
+      "etherscan_url": "https://sepolia.etherscan.io/tx/0xc5ece31d4a68931a87e907c4ced54025073a79a91e4e05d299378f6cffa274b7",
+      "verified": 505,
+      "total": 581,
+      "verus_version": "0.2026.01.14.88f7396",
+      "rust_version": "1.92.0",
+      "results_file": "results/2026-01-27T10-13-14Z.json"
+    }
+  ]
+}
