@@ -24,8 +24,8 @@ Add this to your project's README:
 
 - **Verified**: 70/70 functions
 - **Network**: sepolia
-- **Transaction**: [0xb05a9b0da98e728470ab9004ea0f14d2d496206198f925d38861742de1830dee](https://sepolia.etherscan.io/tx/0xb05a9b0da98e728470ab9004ea0f14d2d496206198f925d38861742de1830dee)
-- **Content Hash**: `0x748b0e3e98ec1bc349f0671b3773e42810d4c1415131a8c7086f37d4a5d421ff`
+- **Transaction**: [0x86ce12822d1437e902554d5d4e4931e1eee4711d71aa32254dcc7fde46df21d3](https://sepolia.etherscan.io/tx/0x86ce12822d1437e902554d5d4e4931e1eee4711d71aa32254dcc7fde46df21d3)
+- **Content Hash**: `0x4ceb274c8a805332ea9f9f08e9e9d1d54636c7977bb92bcf3438c66f6f8cf91d`
 
 ## Verification History
 
