@@ -144,8 +144,8 @@ runs:
         
         echo "$OUTPUT"
         
-        # Extract transaction hash (format: "Tx Hash: 0x...")
-        TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*0x[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*0x([a-fA-F0-9]{64})$/0x\1/')
+        # Extract transaction hash (format: "Tx Hash: 0x..." or "Tx Hash: ..." without 0x)
+        TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*(0x)?[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*Tx Hash:[[:space:]]*(0x)?([a-fA-F0-9]{64})$/0x\2/')
         
         # Extract content hash (format: "Content Hash: 0x..." or "Content hash: 0x...")
         CONTENT_HASH=$(echo "$OUTPUT" | grep -Eio 'Content Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')

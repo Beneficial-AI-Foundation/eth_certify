@@ -153,7 +153,8 @@ jobs:
           echo "$OUTPUT"
           
           # Extract outputs
-          TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*0x[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*0x/0x/')
+          # Handle both "Tx Hash: 0x..." and "Tx Hash: ..." (without 0x prefix)
+          TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*(0x)?[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*Tx Hash:[[:space:]]*(0x)?/0x/')
           CONTENT_HASH=$(echo "$OUTPUT" | grep -Eio 'Content Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
           
           echo "tx_hash=$TX_HASH" >> $GITHUB_OUTPUT
