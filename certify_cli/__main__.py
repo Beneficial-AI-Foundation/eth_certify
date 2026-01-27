@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import CertifyConfig, EnvConfig, Network
 from .deploy import certify_content, deploy_contract
+from .registry import update_registry
 from .verify import verify_content
 
 
@@ -61,6 +62,66 @@ def main() -> int:
         help="Contract address (default: from .env)",
     )
 
+    # Update-registry command
+    registry_parser = subparsers.add_parser(
+        "update-registry",
+        help="Update certification registry (badges, history, README)",
+    )
+    registry_parser.add_argument(
+        "--cert-id",
+        type=str,
+        required=True,
+        help="Certification ID (e.g., 'owner-repo')",
+    )
+    registry_parser.add_argument(
+        "--repo",
+        type=str,
+        required=True,
+        help="Repository path (e.g., 'Owner/Repo')",
+    )
+    registry_parser.add_argument(
+        "--ref",
+        type=str,
+        required=True,
+        help="Git ref that was certified",
+    )
+    registry_parser.add_argument(
+        "--network",
+        type=str,
+        required=True,
+        help="Ethereum network (mainnet/sepolia)",
+    )
+    registry_parser.add_argument(
+        "--verified",
+        type=int,
+        required=True,
+        help="Number of verified functions",
+    )
+    registry_parser.add_argument(
+        "--total",
+        type=int,
+        required=True,
+        help="Total number of functions",
+    )
+    registry_parser.add_argument(
+        "--tx-hash",
+        type=str,
+        required=True,
+        help="Transaction hash",
+    )
+    registry_parser.add_argument(
+        "--content-hash",
+        type=str,
+        required=True,
+        help="Content hash that was certified",
+    )
+    registry_parser.add_argument(
+        "--base-dir",
+        type=str,
+        default="certifications",
+        help="Base directory for certifications (default: certifications)",
+    )
+
     args = parser.parse_args()
 
     try:
@@ -70,6 +131,8 @@ def main() -> int:
             return _handle_certify(args)
         elif args.command == "verify":
             return _handle_verify(args)
+        elif args.command == "update-registry":
+            return _handle_update_registry(args)
     except FileNotFoundError as e:
         print(f"Error: {e}")
         return 1
@@ -133,6 +196,23 @@ def _handle_verify(args: argparse.Namespace) -> int:
     result = verify_content(certify_config, rpc_url, contract)
     print(result.message)
     return 0 if result.verified else 1
+
+
+def _handle_update_registry(args: argparse.Namespace) -> int:
+    """Handle the update-registry command."""
+    result = update_registry(
+        cert_id=args.cert_id,
+        repo_path=args.repo,
+        ref=args.ref,
+        network=args.network,
+        verified=args.verified,
+        total=args.total,
+        tx_hash=args.tx_hash,
+        content_hash=args.content_hash,
+        base_dir=Path(args.base_dir),
+    )
+    print(result.message)
+    return 0 if result.success else 1
 
 
 def _parse_network(network_str: str) -> Network:

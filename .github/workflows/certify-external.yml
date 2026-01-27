@@ -177,163 +177,19 @@ jobs:
       # ═══════════════════════════════════════════════════════════════
       - name: Update certification registry
         working-directory: certify
-        env:
-          CERT_ID: ${{ steps.repo.outputs.cert_id }}
-          REPO_PATH: ${{ steps.repo.outputs.repo_path }}
-          VERIFIED: ${{ steps.verify.outputs.verified-count }}
-          TOTAL: ${{ steps.verify.outputs.total-functions }}
-          TX_HASH: ${{ steps.certify.outputs.tx_hash }}
-          CONTENT_HASH: ${{ steps.certify.outputs.content_hash }}
-          ETHERSCAN_URL: ${{ steps.certify.outputs.etherscan_url }}
-          REF: ${{ inputs.ref }}
-          NETWORK: ${{ inputs.network }}
         run: |
-          CERT_DIR="certifications/$CERT_ID"
-          mkdir -p "$CERT_DIR"
-          
-          # Determine badge color
-          PERCENT=$((VERIFIED * 100 / TOTAL))
-          if [ "$PERCENT" -ge 90 ]; then COLOR="brightgreen"
-          elif [ "$PERCENT" -ge 70 ]; then COLOR="green"
-          elif [ "$PERCENT" -ge 50 ]; then COLOR="yellow"
-          else COLOR="orange"
-          fi
-          
-          # Create badge JSON for shields.io
-          cat > "$CERT_DIR/badge.json" << EOF
-          {
-            "schemaVersion": 1,
-            "label": "BAIF Certified",
-            "message": "${VERIFIED}/${TOTAL} verified",
-            "color": "${COLOR}",
-            "namedLogo": "ethereum",
-            "logoColor": "white"
-          }
-          EOF
-          
-          # Generate SVG badge
-          if [ "$PERCENT" -eq 100 ]; then
-            BG_COLOR="#2ea44f"  # GitHub green
-          elif [ "$PERCENT" -ge 50 ]; then
-            BG_COLOR="#dbab09"  # Yellow
-          else
-            BG_COLOR="#cb2431"  # Red
-          fi
-          
-          LABEL_WIDTH=95
-          MESSAGE_WIDTH=85
-          TOTAL_WIDTH=$((LABEL_WIDTH + MESSAGE_WIDTH))
-          
-          # Generate SVG badge (no nested svg - use scaled g for logo)
-          if [ "$PERCENT" -eq 100 ]; then
-            CHECKMARK='<g transform="translate(162, 8)"><circle cx="5" cy="5" r="5" fill="#fff" fill-opacity="0.3"/><path d="M2 5l2 2 4-4" stroke="#fff" stroke-width="1.5" fill="none"/></g>'
-          else
-            CHECKMARK=""
-          fi
-          
-          cat > "$CERT_DIR/badge.svg" << SVGEOF
-<svg xmlns="http://www.w3.org/2000/svg" width="${TOTAL_WIDTH}" height="28" role="img" aria-label="BAIF Certified: ${VERIFIED}/${TOTAL} verified">
-  <title>BAIF Certified: ${VERIFIED}/${TOTAL} verified</title>
-  <defs>
-    <linearGradient id="bg" x2="0" y2="100%">
-      <stop offset="0" stop-color="#555" stop-opacity=".1"/>
-      <stop offset="1" stop-opacity=".1"/>
-    </linearGradient>
-    <clipPath id="r">
-      <rect width="${TOTAL_WIDTH}" height="28" rx="6" fill="#fff"/>
-    </clipPath>
-  </defs>
-  <g clip-path="url(#r)">
-    <rect width="${LABEL_WIDTH}" height="28" fill="#333"/>
-    <rect x="${LABEL_WIDTH}" width="${MESSAGE_WIDTH}" height="28" fill="${BG_COLOR}"/>
-    <rect width="${TOTAL_WIDTH}" height="28" fill="url(#bg)"/>
-  </g>
-  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11" font-weight="bold">
-    <g transform="translate(8, 5) scale(0.043)">
-      <path fill="#fff" fill-opacity="0.9" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
-      <path fill="#fff" fill-opacity="0.7" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
-      <path fill="#fff" fill-opacity="0.9" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.601L256 236.587z"/>
-      <path fill="#fff" fill-opacity="0.7" d="M127.962 416.905v-104.72L0 236.585z"/>
-    </g>
-    <text x="55" y="18" fill="#fff">BAIF Certified</text>
-    <text x="137" y="18" fill="#fff">${VERIFIED}/${TOTAL} verified</text>
-  </g>
-  ${CHECKMARK}
-</svg>
-SVGEOF
-          
-          # Create/update certification record
-          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          
-          # Read existing history or create new
-          HISTORY_FILE="$CERT_DIR/history.json"
-          if [ -f "$HISTORY_FILE" ]; then
-            EXISTING=$(cat "$HISTORY_FILE")
-          else
-            EXISTING='{"certifications":[]}'
-          fi
-          
-          # Add new certification to history
-          NEW_ENTRY=$(jq -n \
-            --arg timestamp "$TIMESTAMP" \
-            --arg ref "$REF" \
-            --arg network "$NETWORK" \
-            --arg tx_hash "$TX_HASH" \
-            --arg content_hash "$CONTENT_HASH" \
-            --arg etherscan_url "$ETHERSCAN_URL" \
-            --argjson verified "$VERIFIED" \
-            --argjson total "$TOTAL" \
-            '{
-              timestamp: $timestamp,
-              ref: $ref,
-              network: $network,
-              tx_hash: $tx_hash,
-              content_hash: $content_hash,
-              etherscan_url: $etherscan_url,
-              verified: $verified,
-              total: $total
-            }')
-          
-          echo "$EXISTING" | jq --argjson new "$NEW_ENTRY" '.certifications = [$new] + .certifications' > "$HISTORY_FILE"
-          
-          # Create info file with badge instructions
-          cat > "$CERT_DIR/README.md" << EOF
-          # BAIF Certification: $REPO_PATH
-
-          <p align="center">
-            <a href="https://github.com/Beneficial-AI-Foundation/eth_certify/blob/main/certifications/${CERT_ID}/history.json">
-              <img src="badge.svg" alt="BAIF Certified" />
-            </a>
-          </p>
-
-          ## Badge
-
-          Add this to your project's README:
-
-          **Option 1: SVG Badge (recommended)**
-          \`\`\`markdown
-          [![BAIF Certified](https://raw.githubusercontent.com/Beneficial-AI-Foundation/eth_certify/main/certifications/${CERT_ID}/badge.svg)](https://github.com/Beneficial-AI-Foundation/eth_certify/blob/main/certifications/${CERT_ID}/history.json)
-          \`\`\`
-
-          **Option 2: Shields.io Endpoint**
-          \`\`\`markdown
-          [![BAIF Certified](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Beneficial-AI-Foundation/eth_certify/main/certifications/${CERT_ID}/badge.json)](https://github.com/Beneficial-AI-Foundation/eth_certify/blob/main/certifications/${CERT_ID}/history.json)
-          \`\`\`
-
-          ## Latest Certification
-
-          - **Verified**: ${VERIFIED}/${TOTAL} functions
-          - **Network**: ${NETWORK}
-          - **Transaction**: [${TX_HASH}](${ETHERSCAN_URL})
-          - **Content Hash**: \`${CONTENT_HASH}\`
-
-          ## Verification History
-
-          See [history.json](history.json) for all certifications.
-          EOF
+          uv run python3 -m certify_cli update-registry \
+            --cert-id "${{ steps.repo.outputs.cert_id }}" \
+            --repo "${{ steps.repo.outputs.repo_path }}" \
+            --ref "${{ inputs.ref }}" \
+            --network "${{ inputs.network }}" \
+            --verified "${{ steps.verify.outputs.verified-count }}" \
+            --total "${{ steps.verify.outputs.total-functions }}" \
+            --tx-hash "${{ steps.certify.outputs.tx_hash }}" \
+            --content-hash "${{ steps.certify.outputs.content_hash }}"
           
           echo "=== Certification files created ==="
-          ls -la "$CERT_DIR/"
+          ls -la "certifications/${{ steps.repo.outputs.cert_id }}/"
 
       - name: Commit certification
         working-directory: certify
