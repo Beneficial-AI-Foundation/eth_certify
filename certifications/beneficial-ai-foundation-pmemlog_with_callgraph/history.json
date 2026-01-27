@@ -1,6 +1,16 @@
 {
   "certifications": [
     {
+      "timestamp": "2026-01-27T06:59:09Z",
+      "ref": "main",
+      "network": "mainnet",
+      "tx_hash": "0xf4b097534ecc0ea09446ee7d392de3749b0cafa46c03c02739cea40c8cebf76a",
+      "content_hash": "0xbb0dea4b810198227e7f5f4de6368c5a35bb4a1a2c146ae9666c2fe6f4f08f96",
+      "etherscan_url": "https://etherscan.io/tx/0xf4b097534ecc0ea09446ee7d392de3749b0cafa46c03c02739cea40c8cebf76a",
+      "verified": 70,
+      "total": 70
+    },
+    {
       "timestamp": "2026-01-27T06:09:31Z",
       "ref": "main",
       "network": "mainnet",
