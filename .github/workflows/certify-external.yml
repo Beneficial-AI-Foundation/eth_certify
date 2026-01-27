@@ -180,18 +180,43 @@ jobs:
       - name: Update certification registry
         working-directory: certify
         run: |
-          uv run python3 -m certify_cli update-registry \
-            --cert-id "${{ steps.repo.outputs.cert_id }}" \
-            --repo "${{ steps.repo.outputs.repo_path }}" \
-            --ref "${{ inputs.ref }}" \
-            --network "${{ inputs.network }}" \
-            --verified "${{ steps.verify.outputs.verified-count }}" \
-            --total "${{ steps.verify.outputs.total-functions }}" \
-            --tx-hash "${{ steps.certify.outputs.tx_hash }}" \
-            --content-hash "${{ steps.certify.outputs.content_hash }}"
+          # Build command with required args
+          CMD="uv run python3 -m certify_cli update-registry"
+          CMD="$CMD --cert-id \"${{ steps.repo.outputs.cert_id }}\""
+          CMD="$CMD --repo \"${{ steps.repo.outputs.repo_path }}\""
+          CMD="$CMD --ref \"${{ inputs.ref }}\""
+          CMD="$CMD --network \"${{ inputs.network }}\""
+          CMD="$CMD --verified \"${{ steps.verify.outputs.verified-count }}\""
+          CMD="$CMD --total \"${{ steps.verify.outputs.total-functions }}\""
+          CMD="$CMD --tx-hash \"${{ steps.certify.outputs.tx_hash }}\""
+          CMD="$CMD --content-hash \"${{ steps.certify.outputs.content_hash }}\""
+          
+          # Add optional toolchain info if available
+          VERUS_VERSION="${{ steps.verify.outputs.verus-version }}"
+          RUST_VERSION="${{ steps.verify.outputs.rust-version }}"
+          RESULTS_FILE="${{ steps.verify.outputs.results-file }}"
+          
+          if [ -n "$VERUS_VERSION" ]; then
+            CMD="$CMD --verus-version \"$VERUS_VERSION\""
+          fi
+          if [ -n "$RUST_VERSION" ]; then
+            CMD="$CMD --rust-version \"$RUST_VERSION\""
+          fi
+          if [ -n "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
+            CMD="$CMD --results-file \"$RESULTS_FILE\""
+          fi
+          
+          echo "Running: $CMD"
+          eval $CMD
           
           echo "=== Certification files created ==="
           ls -la "certifications/${{ steps.repo.outputs.cert_id }}/"
+          
+          # Show results directory if it exists
+          if [ -d "certifications/${{ steps.repo.outputs.cert_id }}/results" ]; then
+            echo "=== Results files ==="
+            ls -la "certifications/${{ steps.repo.outputs.cert_id }}/results/"
+          fi
 
       - name: Commit certification
         working-directory: certify

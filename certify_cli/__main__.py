@@ -116,6 +116,24 @@ def main() -> int:
         help="Content hash that was certified",
     )
     registry_parser.add_argument(
+        "--verus-version",
+        type=str,
+        default=None,
+        help="Verus version used for verification",
+    )
+    registry_parser.add_argument(
+        "--rust-version",
+        type=str,
+        default=None,
+        help="Rust toolchain version used",
+    )
+    registry_parser.add_argument(
+        "--results-file",
+        type=str,
+        default=None,
+        help="Path to verification results JSON to store",
+    )
+    registry_parser.add_argument(
         "--base-dir",
         type=str,
         default="certifications",
@@ -210,6 +228,9 @@ def _handle_update_registry(args: argparse.Namespace) -> int:
         tx_hash=args.tx_hash,
         content_hash=args.content_hash,
         base_dir=Path(args.base_dir),
+        verus_version=args.verus_version,
+        rust_version=args.rust_version,
+        results_file=args.results_file,
     )
     print(result.message)
     return 0 if result.success else 1

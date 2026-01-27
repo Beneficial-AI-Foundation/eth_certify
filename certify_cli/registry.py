@@ -1,9 +1,11 @@
 """Certification registry management - badges, history, and documentation."""
 
 import json
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass
@@ -17,6 +19,9 @@ class CertificationEntry:
     etherscan_url: str
     verified: int
     total: int
+    verus_version: Optional[str] = None
+    rust_version: Optional[str] = None
+    results_file: Optional[str] = None
 
 
 @dataclass
@@ -37,6 +42,9 @@ def update_registry(
     tx_hash: str,
     content_hash: str,
     base_dir: Path = Path("certifications"),
+    verus_version: Optional[str] = None,
+    rust_version: Optional[str] = None,
+    results_file: Optional[str] = None,
 ) -> RegistryUpdateResult:
     """
     Update the certification registry with a new certification.
@@ -46,6 +54,7 @@ def update_registry(
     - badge.svg (custom SVG badge)
     - history.json (certification history)
     - README.md (badge instructions)
+    - results/<timestamp>.json (verification results, if provided)
     
     Args:
         cert_id: Unique certification ID (e.g., "owner-repo")
@@ -57,12 +66,18 @@ def update_registry(
         tx_hash: Transaction hash
         content_hash: Content hash that was certified
         base_dir: Base directory for certifications
+        verus_version: Verus version used for verification
+        rust_version: Rust toolchain version used
+        results_file: Path to verification results JSON to store
         
     Returns:
         RegistryUpdateResult with success status and message
     """
     cert_dir = base_dir / cert_id
     cert_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp_safe = timestamp.replace(":", "-")  # Safe for filenames
     
     try:
         # Calculate percentage for badge color
@@ -74,6 +89,22 @@ def update_registry(
         else:
             etherscan_url = f"https://{network}.etherscan.io/tx/{tx_hash}"
         
+        # Store results file if provided
+        stored_results_path = None
+        if results_file:
+            results_dir = cert_dir / "results"
+            results_dir.mkdir(exist_ok=True)
+            
+            # Copy to timestamped file
+            dest_file = results_dir / f"{timestamp_safe}.json"
+            shutil.copy2(results_file, dest_file)
+            
+            # Also copy to latest.json
+            latest_file = results_dir / "latest.json"
+            shutil.copy2(results_file, latest_file)
+            
+            stored_results_path = f"results/{timestamp_safe}.json"
+        
         # 1. Create badge.json for shields.io
         _create_badge_json(cert_dir, verified, total, percent)
         
@@ -82,7 +113,7 @@ def update_registry(
         
         # 3. Update history.json
         entry = CertificationEntry(
-            timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            timestamp=timestamp,
             ref=ref,
             network=network,
             tx_hash=tx_hash,
@@ -90,6 +121,9 @@ def update_registry(
             etherscan_url=etherscan_url,
             verified=verified,
             total=total,
+            verus_version=verus_version,
+            rust_version=rust_version,
+            results_file=stored_results_path,
         )
         _update_history(cert_dir, entry)
         
@@ -222,6 +256,15 @@ def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
         "verified": entry.verified,
         "total": entry.total,
     }
+    
+    # Add optional fields if present
+    if entry.verus_version:
+        new_entry["verus_version"] = entry.verus_version
+    if entry.rust_version:
+        new_entry["rust_version"] = entry.rust_version
+    if entry.results_file:
+        new_entry["results_file"] = entry.results_file
+    
     history["certifications"].insert(0, new_entry)
     
     with open(history_file, "w") as f:
@@ -235,6 +278,20 @@ def _create_readme(
     entry: CertificationEntry,
 ) -> None:
     """Create README with badge instructions."""
+    # Build toolchain info section
+    toolchain_info = ""
+    if entry.verus_version or entry.rust_version:
+        toolchain_info = "\n### Toolchain\n"
+        if entry.verus_version:
+            toolchain_info += f"- **Verus**: {entry.verus_version}\n"
+        if entry.rust_version:
+            toolchain_info += f"- **Rust**: {entry.rust_version}\n"
+    
+    # Build results link if available
+    results_link = ""
+    if entry.results_file:
+        results_link = f"\n- **Results**: [{entry.results_file}]({entry.results_file})"
+    
     readme_content = f'''# BAIF Certification: {repo_path}
 
 <p align="center">
@@ -262,8 +319,8 @@ Add this to your project's README:
 - **Verified**: {entry.verified}/{entry.total} functions
 - **Network**: {entry.network}
 - **Transaction**: [{entry.tx_hash}]({entry.etherscan_url})
-- **Content Hash**: `{entry.content_hash}`
-
+- **Content Hash**: `{entry.content_hash}`{results_link}
+{toolchain_info}
 ## Verification History
 
 See [history.json](history.json) for all certifications.
