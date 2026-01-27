@@ -1,0 +1,154 @@
+# Complete example: Verify → Certify → Badge
+# 
+# This workflow demonstrates the full BAIF certification pipeline:
+# 1. Run Verus verification using probe-verus action
+# 2. Certify results on Ethereum using certify action (BAIF internal)
+# 3. Update the certification badge for the README
+#
+# Copy and adapt this for your BAIF Verus project.
+
+name: Verify and Certify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**/*.rs'
+      - 'Cargo.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: write  # Needed to commit badge updates
+
+jobs:
+  verify-certify-badge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1: Run Verus Verification
+      # ═══════════════════════════════════════════════════════════════
+      - name: Run Verus verification
+        uses: beneficial-ai-foundation/probe-verus/action@v1
+        id: verify
+        with:
+          project-path: .  # or ./my-verus-crate for workspaces
+          # package: my-crate  # uncomment for workspace projects
+
+      - name: Verification summary
+        run: |
+          echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Verified**: ${{ steps.verify.outputs.verified-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total**: ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Results**: ${{ steps.verify.outputs.results-file }}" >> $GITHUB_STEP_SUMMARY
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 2: Certify on Ethereum (BAIF internal)
+      # ═══════════════════════════════════════════════════════════════
+      - name: Checkout certify repo
+        uses: actions/checkout@v4
+        with:
+          repository: beneficial-ai-foundation/certify
+          path: _certify
+          token: ${{ secrets.CERTIFY_REPO_PAT }}
+
+      - name: Certify on Mainnet (via Safe)
+        id: certify-mainnet
+        working-directory: _certify
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          MAINNET_PRIVATE_KEY: ${{ secrets.MAINNET_PRIVATE_KEY }}
+          CERTIFY_ADDRESS: ${{ vars.MAINNET_CERTIFY_ADDRESS }}
+        run: |
+          # Create config
+          cat > certify.conf << EOF
+          CERTIFY_SOURCE="${{ steps.verify.outputs.results-file }}"
+          CERTIFY_DESCRIPTION="Verus verification: ${{ steps.verify.outputs.verified-count }}/${{ steps.verify.outputs.total-functions }} - ${{ github.sha }}"
+          EOF
+          
+          # Install deps
+          pip install uv
+          uv sync
+          
+          # Certify via Safe
+          OUTPUT=$(uv run python3 -m certify_cli certify \
+            --network mainnet \
+            --safe ${{ vars.MAINNET_SAFE_ADDRESS }} \
+            --execute 2>&1) || true
+          
+          echo "$OUTPUT"
+          
+          # Extract outputs
+          TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*0x[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*0x/0x/')
+          CONTENT_HASH=$(echo "$OUTPUT" | grep -Eio 'Content Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
+          
+          echo "tx_hash=$TX_HASH" >> $GITHUB_OUTPUT
+          echo "content_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
+          
+          if [ -n "$TX_HASH" ]; then
+            echo "etherscan_url=https://etherscan.io/tx/$TX_HASH" >> $GITHUB_OUTPUT
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 3: Update Badge
+      # ═══════════════════════════════════════════════════════════════
+      - name: Update certification badge
+        run: |
+          VERIFIED=${{ steps.verify.outputs.verified-count }}
+          TOTAL=${{ steps.verify.outputs.total-functions }}
+          
+          # Determine color based on percentage
+          PERCENT=$((VERIFIED * 100 / TOTAL))
+          if [ "$PERCENT" -ge 90 ]; then
+            COLOR="brightgreen"
+          elif [ "$PERCENT" -ge 70 ]; then
+            COLOR="green"
+          elif [ "$PERCENT" -ge 50 ]; then
+            COLOR="yellow"
+          else
+            COLOR="orange"
+          fi
+          
+          # Create badge JSON for shields.io endpoint
+          mkdir -p docs
+          cat > docs/certification-badge.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "BAIF Certified",
+            "message": "${VERIFIED}/${TOTAL} verified",
+            "color": "${COLOR}",
+            "namedLogo": "ethereum",
+            "logoColor": "white"
+          }
+          EOF
+          
+          echo "Badge: ${VERIFIED}/${TOTAL} (${COLOR})"
+
+      - name: Commit badge update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add docs/certification-badge.json
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update certification badge [skip ci]"
+            git push
+            echo "✅ Badge updated"
+          else
+            echo "No badge changes"
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 4: Summary
+      # ═══════════════════════════════════════════════════════════════
+      - name: Final summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Certification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tx Hash**: [${{ steps.certify-mainnet.outputs.tx_hash }}](${{ steps.certify-mainnet.outputs.etherscan_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Content Hash**: \`${{ steps.certify-mainnet.outputs.content_hash }}\`" >> $GITHUB_STEP_SUMMARY
