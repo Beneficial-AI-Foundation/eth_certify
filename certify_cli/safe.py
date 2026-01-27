@@ -107,7 +107,7 @@ def execute_safe_transaction(
         
         if threshold == 1:
             # We can execute directly on-chain
-            print(f"Safe threshold is 1. Executing transaction directly...")
+            print("Safe threshold is 1. Executing transaction directly...")
             
             tx_hash, _ = safe_tx.execute(
                 tx_sender_private_key=private_key,
@@ -153,8 +153,7 @@ def encode_certify_website_call(
     Returns the calldata bytes for calling:
     certifyWebsite(string url, bytes32 contentHash, string description)
     """
-    # Function signature
-    function_signature = "certifyWebsite(string,bytes32,string)"
+    # Function signature: certifyWebsite(string,bytes32,string)
     
     # Create Web3 instance (doesn't need a provider for encoding)
     w3 = Web3()

@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -152,14 +151,17 @@ def _create_badge_json(cert_dir: Path, verified: int, total: int, percent: int) 
 def _create_badge_svg(cert_dir: Path, verified: int, total: int, percent: int) -> None:
     """Create custom SVG badge."""
     bg_color = _get_svg_bg_color(percent)
-    label_width = 95
-    message_width = 85
+    label_width = 110  # Wider for better spacing
+    message_width = 95
     total_width = label_width + message_width
+    
+    # Checkmark position based on total width
+    checkmark_x = total_width - 18
     
     # Checkmark for 100% verified
     checkmark = ""
     if percent == 100:
-        checkmark = '''<g transform="translate(162, 8)">
+        checkmark = f'''<g transform="translate({checkmark_x}, 8)">
     <circle cx="5" cy="5" r="5" fill="#fff" fill-opacity="0.3"/>
     <path d="M2 5l2 2 4-4" stroke="#fff" stroke-width="1.5" fill="none"/>
   </g>'''
@@ -181,14 +183,14 @@ def _create_badge_svg(cert_dir: Path, verified: int, total: int, percent: int) -
     <rect width="{total_width}" height="28" fill="url(#bg)"/>
   </g>
   <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11" font-weight="bold">
-    <g transform="translate(8, 5) scale(0.043)">
+    <g transform="translate(6, 6) scale(0.038)">
       <path fill="#fff" fill-opacity="0.9" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
       <path fill="#fff" fill-opacity="0.7" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
       <path fill="#fff" fill-opacity="0.9" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.601L256 236.587z"/>
       <path fill="#fff" fill-opacity="0.7" d="M127.962 416.905v-104.72L0 236.585z"/>
     </g>
-    <text x="55" y="18" fill="#fff">BAIF Certified</text>
-    <text x="137" y="18" fill="#fff">{verified}/{total} verified</text>
+    <text x="62" y="18" fill="#fff">BAIF Certified</text>
+    <text x="{label_width + message_width // 2}" y="18" fill="#fff">{verified}/{total} verified</text>
   </g>
   {checkmark}
 </svg>

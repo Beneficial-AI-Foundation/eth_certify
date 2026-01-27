@@ -133,8 +133,9 @@ runs:
         CMD="uv run python3 -m certify_cli certify --network ${{ inputs.network }}"
         
         # Add Safe options if provided
-        if [ -n "${{ inputs.safe-address }}" ]; then
-          CMD="$CMD --safe ${{ inputs.safe-address }}"
+        SAFE_ADDR="${{ inputs.safe-address }}"
+        if [ -n "$SAFE_ADDR" ]; then
+          CMD="$CMD --safe \"$SAFE_ADDR\""
           if [ "${{ inputs.safe-execute }}" = "true" ]; then
             CMD="$CMD --execute"
           fi

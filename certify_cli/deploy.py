@@ -79,7 +79,7 @@ def certify_content(
     if not env.certify_address:
         raise ValueError(
             "CERTIFY_ADDRESS must be set in .env. "
-            f"Run deploy first, then add the address to .env"
+            "Run deploy first, then add the address to .env"
         )
 
     source = certify_config.source

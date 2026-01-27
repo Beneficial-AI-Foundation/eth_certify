@@ -141,7 +141,8 @@ jobs:
           
           # Add Safe for mainnet
           if [ "$NETWORK" = "mainnet" ]; then
-            CMD="$CMD --safe ${{ vars.MAINNET_SAFE_ADDRESS }} --execute"
+            SAFE_ADDR="${{ vars.MAINNET_SAFE_ADDRESS }}"
+            CMD="$CMD --safe \"$SAFE_ADDR\" --execute"
           fi
           
           echo "Running: $CMD"
