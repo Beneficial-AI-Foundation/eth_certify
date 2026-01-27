@@ -119,6 +119,10 @@ def certify_content(
     result = run_forge(args)
 
     if result.success:
+        # Extract transaction hash from broadcast file
+        tx_hash = _extract_tx_hash_from_broadcast(network)
+        tx_info = f"\n   Tx Hash: {tx_hash}" if tx_hash else ""
+        
         return CertifyResult(
             success=True,
             url=source,
@@ -129,6 +133,7 @@ def certify_content(
                 f"   Source: {source}\n"
                 f"   Content Hash: {content_hash}\n"
                 f"   Contract: {env.certify_address}"
+                f"{tx_info}"
             ),
         )
     return CertifyResult(
@@ -138,6 +143,40 @@ def certify_content(
         contract_address=env.certify_address,
         message=f"❌ Certification failed:\n{result.stderr}",
     )
+
+
+def _extract_tx_hash_from_broadcast(network: Network) -> Optional[str]:
+    """Extract transaction hash from Foundry broadcast file."""
+    import json
+    from pathlib import Path
+    
+    chain_ids = {
+        Network.MAINNET: 1,
+        Network.SEPOLIA: 11155111,
+        Network.ANVIL: 31337,
+        Network.LOCAL: 31337,
+    }
+    
+    chain_id = chain_ids.get(network)
+    if not chain_id:
+        return None
+    
+    broadcast_file = Path(f"broadcast/Certify.s.sol/{chain_id}/run-latest.json")
+    if not broadcast_file.exists():
+        return None
+    
+    try:
+        with open(broadcast_file) as f:
+            data = json.load(f)
+        
+        # Get the first transaction hash
+        transactions = data.get("transactions", [])
+        if transactions:
+            return transactions[0].get("hash")
+    except (json.JSONDecodeError, KeyError, IndexError):
+        pass
+    
+    return None
 
 
 def _certify_via_safe(
