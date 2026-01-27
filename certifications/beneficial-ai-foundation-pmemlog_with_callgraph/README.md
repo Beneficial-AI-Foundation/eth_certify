@@ -10,10 +10,10 @@ Add this to your README:
 
 ## Latest Certification
 
-- **Verified**: 0/0 functions
+- **Verified**: 70/70 functions
 - **Network**: mainnet
-- **Transaction**: [0xfbcc8234a70610cef64985b756aa8f7973d0d1fd357e2d3a6ae0d079ecf7ac79](https://etherscan.io/tx/0xfbcc8234a70610cef64985b756aa8f7973d0d1fd357e2d3a6ae0d079ecf7ac79)
-- **Content Hash**: `0x4e8a5764e848889f70a6e2451f6d04823e8c7a04e3ddf73883caaabb09360594`
+- **Transaction**: [0x4ed73827e2a42d887fad41772323857ffc1e295e75f25a7d58b5ff85cd30cac9](https://etherscan.io/tx/0x4ed73827e2a42d887fad41772323857ffc1e295e75f25a7d58b5ff85cd30cac9)
+- **Content Hash**: `0xe4699ad025991f93cd99f7607a9c6d00852fc5d710c538e673896586eaa36b6f`
 
 ## Verification History
 
