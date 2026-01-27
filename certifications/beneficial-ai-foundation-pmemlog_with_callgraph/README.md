@@ -16,16 +16,16 @@ Add this to your project's README:
 ```
 
 **Option 2: Shields.io Endpoint**
-                                                                                                                                                                                ```markdown
+```markdown
 [![BAIF Certified](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Beneficial-AI-Foundation/eth_certify/main/certifications/beneficial-ai-foundation-pmemlog_with_callgraph/badge.json)](https://github.com/Beneficial-AI-Foundation/eth_certify/blob/main/certifications/beneficial-ai-foundation-pmemlog_with_callgraph/history.json)
 ```
 
 ## Latest Certification
-                                                                    
+
 - **Verified**: 70/70 functions
 - **Network**: mainnet
-- **Transaction**: [0x4ed73827e2a42d887fad41772323857ffc1e295e75f25a7d58b5ff85cd30cac9](https://etherscan.io/tx/0x4ed73827e2a42d887fad41772323857ffc1e295e75f25a7d58b5ff85cd30cac9)
-- **Content Hash**: `0xe4699ad025991f93cd99f7607a9c6d00852fc5d710c538e673896586eaa36b6f`
+- **Transaction**: [0xf4b097534ecc0ea09446ee7d392de3749b0cafa46c03c02739cea40c8cebf76a](https://etherscan.io/tx/0xf4b097534ecc0ea09446ee7d392de3749b0cafa46c03c02739cea40c8cebf76a)
+- **Content Hash**: `0xbb0dea4b810198227e7f5f4de6368c5a35bb4a1a2c146ae9666c2fe6f4f08f96`
 
 ## Verification History
 
