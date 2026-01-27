@@ -169,13 +169,19 @@ def _fetch_certification(
 
 def _parse_logs(logs: str) -> Optional[OnChainCertification]:
     """Parse cast logs output to extract certification data."""
-    # Extract topics (hex values on their own lines after "topics:")
-    topics_match = re.search(r"topics:\s*\n((?:\s+0x[a-f0-9]{64}\s*\n?)+)", logs, re.IGNORECASE)
-    if not topics_match:
+    # Extract all topic hashes from the logs
+    # Topics appear as 0x followed by 64 hex chars, typically in a topics: [...] block
+    # Find the topics section and extract all 64-char hex values from it
+    topics_section = re.search(r"topics:\s*\[(.*?)\]", logs, re.DOTALL | re.IGNORECASE)
+    if not topics_section:
+        # Fallback: try plain format without brackets
+        topics_section = re.search(r"topics:\s*\n((?:\s+0x[a-f0-9]{64}\s*\n)+)", logs, re.IGNORECASE)
+    
+    if not topics_section:
         return None
-
-    topic_lines = topics_match.group(1).strip().split("\n")
-    topics = [line.strip() for line in topic_lines if line.strip().startswith("0x")]
+    
+    # Extract all 64-char hex values from the topics section
+    topics = re.findall(r"0x[a-f0-9]{64}", topics_section.group(1), re.IGNORECASE)
 
     if len(topics) < 4:
         return None
