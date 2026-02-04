@@ -205,6 +205,15 @@ def _certify_via_safe(
     description = certify_config.description
     contract_address = env.certify_address
 
+    if not contract_address:
+        return CertifyResult(
+            success=False,
+            url=source,
+            content_hash=content_hash,
+            contract_address="",
+            message="❌ CERTIFY_ADDRESS not set. Deploy the contract first or set the address.",
+        )
+
     if execute:
         # Programmatic execution via Safe SDK
         return _execute_safe_certification(

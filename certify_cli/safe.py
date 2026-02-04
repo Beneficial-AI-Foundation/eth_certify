@@ -3,8 +3,11 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from typing import cast
+
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
+from eth_typing import URI, ChecksumAddress
 from web3 import Web3
 
 from safe_eth.eth import EthereumClient
@@ -66,9 +69,19 @@ def execute_safe_transaction(
         )
 
     try:
-        # Initialize clients
-        ethereum_client = EthereumClient(rpc_url)
-        safe = Safe(safe_address, ethereum_client)
+        # Initialize clients with proper types
+        ethereum_client = EthereumClient(cast(URI, rpc_url))
+        safe_checksum: ChecksumAddress = Web3.to_checksum_address(safe_address)
+
+        # Detect Safe version and instantiate appropriate subclass
+        safe_version = Safe.detect_version(safe_checksum, ethereum_client)
+        if not safe_version:
+            return SafeExecutionResult(
+                success=False,
+                tx_hash=None,
+                message=f"❌ Could not detect Safe version for {safe_address}",
+            )
+        safe = Safe.from_version(safe_version, safe_checksum, ethereum_client)
 
         # Get the signer account
         account: LocalAccount = Account.from_key(private_key)
@@ -86,8 +99,9 @@ def execute_safe_transaction(
         safe_info = safe.retrieve_all_info()
 
         # Build the Safe transaction
+        contract_checksum: ChecksumAddress = Web3.to_checksum_address(contract_address)
         safe_tx = safe.build_multisig_tx(
-            to=contract_address,
+            to=contract_checksum,
             value=0,
             data=calldata,
             safe_nonce=safe_info.nonce,

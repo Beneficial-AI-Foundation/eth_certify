@@ -160,11 +160,15 @@ class CertifyConfig:
                 "CERTIFY_SOURCE must be set (via environment variable or certify.conf)"
             )
 
+        # Default is always provided, so description will never be None
+        description = _get_env(
+            "CERTIFY_DESCRIPTION", file_vars, "Content certification"
+        )
+        assert description is not None  # For type checker - default guarantees this
+
         return cls(
             source=source,
-            description=_get_env(
-                "CERTIFY_DESCRIPTION", file_vars, "Content certification"
-            ),
+            description=description,
         )
 
     @property

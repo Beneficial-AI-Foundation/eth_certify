@@ -267,7 +267,9 @@ def _handle_verify_hash(args: argparse.Namespace) -> int:
     # Set up RPC URL from env or defaults
     if not rpc_url:
         if network == "mainnet":
-            rpc_url = os.getenv("MAINNET_RPC_URL", "https://ethereum-rpc.publicnode.com")
+            rpc_url = os.getenv(
+                "MAINNET_RPC_URL", "https://ethereum-rpc.publicnode.com"
+            )
         else:
             rpc_url = os.getenv(
                 "SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com"

@@ -303,7 +303,9 @@ def _create_readme(
     # Build commit info
     commit_info = ""
     if entry.commit_sha:
-        short_sha = entry.commit_sha[:7] if len(entry.commit_sha) > 7 else entry.commit_sha
+        short_sha = (
+            entry.commit_sha[:7] if len(entry.commit_sha) > 7 else entry.commit_sha
+        )
         commit_info = f"\n- **Commit**: [`{short_sha}`](https://github.com/{repo_path}/commit/{entry.commit_sha})"
 
     readme_content = f"""# BAIF Certification: {repo_path}
