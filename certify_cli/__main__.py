@@ -93,6 +93,12 @@ def main() -> int:
         type=str,
         help="Contract address (default: from env or known address)",
     )
+    verify_hash_parser.add_argument(
+        "--from-block",
+        type=int,
+        default=None,
+        help="Start block for log search (default: current - 50000)",
+    )
 
     # Update-registry command
     registry_parser = subparsers.add_parser(
@@ -294,6 +300,7 @@ def _handle_verify_hash(args: argparse.Namespace) -> int:
         rpc_url=rpc_url,
         contract_address=contract,
         network=network,
+        from_block=args.from_block,
     )
     print(result.message)
     return 0 if result.verified else 1

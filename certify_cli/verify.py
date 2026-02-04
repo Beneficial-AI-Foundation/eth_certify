@@ -242,6 +242,7 @@ def verify_by_content_hash(
     rpc_url: Optional[str] = None,
     contract_address: Optional[str] = None,
     network: str = "sepolia",
+    from_block: Optional[int] = None,
 ) -> VerifyHashResult:
     """Verify that a content hash exists on-chain.
 
@@ -254,6 +255,7 @@ def verify_by_content_hash(
         rpc_url: RPC endpoint URL (defaults to public node for network)
         contract_address: Certify contract address
         network: Network name for Etherscan links (mainnet/sepolia)
+        from_block: Starting block for search (default: current - 50000)
     """
     rpc = rpc_url or DEFAULT_RPC_URL
     contract = contract_address or DEFAULT_CONTRACT_ADDRESS
@@ -270,7 +272,9 @@ def verify_by_content_hash(
 
     # Query on-chain certification by content hash (topic2)
     print("Searching for certification by content hash...")
-    certification = _fetch_certification_by_content_hash(rpc, contract, content_hash)
+    certification = _fetch_certification_by_content_hash(
+        rpc, contract, content_hash, from_block
+    )
 
     if not certification:
         return VerifyHashResult(
@@ -281,8 +285,13 @@ def verify_by_content_hash(
                 f"❌ No certification found with content hash: {content_hash}\n\n"
                 "   Possible reasons:\n"
                 "   - The content was never certified\n"
-                "   - The certification is older than the search window\n"
+                "   - The certification is older than the search window (50000 blocks)\n"
                 "   - Wrong network (try mainnet vs sepolia)\n"
+                "   - RPC rate limit exceeded (try --from-block with a paid RPC)\n"
+                "\n"
+                "   Note: Public RPCs limit queries to 50000 blocks (~7 days on Sepolia).\n"
+                "   For older certifications, use a paid RPC (Alchemy, Infura) with\n"
+                "   --rpc-url and --from-block options.\n"
             ),
         )
 
@@ -305,12 +314,14 @@ def _fetch_certification_by_content_hash(
     rpc_url: str,
     contract_address: str,
     content_hash: str,
+    from_block: Optional[int] = None,
 ) -> Optional[OnChainCertification]:
     """Fetch certification by content hash (searches topic2)."""
-    current_block = cast_block_number(rpc_url)
-    from_block = current_block - DEFAULT_BLOCK_LOOKBACK
-    if from_block < 0:
-        from_block = 0
+    if from_block is None:
+        current_block = cast_block_number(rpc_url)
+        from_block = current_block - DEFAULT_BLOCK_LOOKBACK
+        if from_block < 0:
+            from_block = 0
 
     # Query with empty topic1 ("") to match any URL hash, filter by content hash
     logs = cast_logs(
