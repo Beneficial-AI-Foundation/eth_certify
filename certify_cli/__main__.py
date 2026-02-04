@@ -7,7 +7,7 @@ from pathlib import Path
 from .config import CertifyConfig, EnvConfig, Network
 from .deploy import certify_content, deploy_contract
 from .registry import update_registry
-from .verify import verify_content
+from .verify import verify_by_content_hash, verify_content
 
 
 def main() -> int:
@@ -64,6 +64,34 @@ def main() -> int:
         "--contract",
         type=str,
         help="Contract address (default: from .env)",
+    )
+
+    # Verify-hash command (verify by content hash directly)
+    verify_hash_parser = subparsers.add_parser(
+        "verify-hash",
+        help="Verify a content hash exists on-chain (useful for independent verification)",
+    )
+    verify_hash_parser.add_argument(
+        "content_hash",
+        type=str,
+        help="The keccak256 hash to verify (with or without 0x prefix)",
+    )
+    verify_hash_parser.add_argument(
+        "--network",
+        type=str,
+        choices=["mainnet", "sepolia"],
+        default="sepolia",
+        help="Network to verify against (default: sepolia)",
+    )
+    verify_hash_parser.add_argument(
+        "--rpc-url",
+        type=str,
+        help="RPC URL to use (default: public node for selected network)",
+    )
+    verify_hash_parser.add_argument(
+        "--contract",
+        type=str,
+        help="Contract address (default: from env or known address)",
     )
 
     # Update-registry command
@@ -153,6 +181,8 @@ def main() -> int:
             return _handle_certify(args)
         elif args.command == "verify":
             return _handle_verify(args)
+        elif args.command == "verify-hash":
+            return _handle_verify_hash(args)
         elif args.command == "update-registry":
             return _handle_update_registry(args)
     except FileNotFoundError as e:
@@ -216,6 +246,47 @@ def _handle_verify(args: argparse.Namespace) -> int:
     certify_config = CertifyConfig.load()
 
     result = verify_content(certify_config, rpc_url, contract)
+    print(result.message)
+    return 0 if result.verified else 1
+
+
+def _handle_verify_hash(args: argparse.Namespace) -> int:
+    """Handle the verify-hash command."""
+    import os
+
+    rpc_url = args.rpc_url
+    contract = args.contract
+    network = args.network
+
+    # Set up RPC URL from env or defaults
+    if not rpc_url:
+        if network == "mainnet":
+            rpc_url = os.getenv("MAINNET_RPC_URL", "https://ethereum-rpc.publicnode.com")
+        else:
+            rpc_url = os.getenv(
+                "SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com"
+            )
+
+    # Set up contract address from env or defaults
+    if not contract:
+        contract = os.getenv("CERTIFY_ADDRESS")
+        if not contract:
+            # Known contract addresses
+            if network == "sepolia":
+                contract = "0x125721f8a45bbABC60aDbaaF102a94d9cae59238"
+            # For mainnet, contract must be set via env or --contract
+
+    if not contract:
+        print(f"Error: Contract address required for {network}")
+        print("Set CERTIFY_ADDRESS env var or use --contract")
+        return 1
+
+    result = verify_by_content_hash(
+        args.content_hash,
+        rpc_url=rpc_url,
+        contract_address=contract,
+        network=network,
+    )
     print(result.message)
     return 0 if result.verified else 1
 

@@ -36,6 +36,16 @@ class VerifyResult:
     message: str
 
 
+@dataclass
+class VerifyHashResult:
+    """Result of a content hash verification."""
+
+    verified: bool
+    content_hash: str
+    certification: Optional[OnChainCertification]
+    message: str
+
+
 def verify_content(
     certify_config: CertifyConfig,
     rpc_url: Optional[str] = None,
@@ -225,3 +235,119 @@ def _parse_logs(logs: str) -> Optional[OnChainCertification]:
         block_number=block_number,
         transaction_hash=tx_hash,
     )
+
+
+def verify_by_content_hash(
+    content_hash: str,
+    rpc_url: Optional[str] = None,
+    contract_address: Optional[str] = None,
+    network: str = "sepolia",
+) -> VerifyHashResult:
+    """Verify that a content hash exists on-chain.
+
+    This searches for certification events by content hash (topic2),
+    which is useful for independent verification when you don't know
+    the original source path that was used during certification.
+
+    Args:
+        content_hash: The keccak256 hash of the content to verify
+        rpc_url: RPC endpoint URL (defaults to public node for network)
+        contract_address: Certify contract address
+        network: Network name for Etherscan links (mainnet/sepolia)
+    """
+    rpc = rpc_url or DEFAULT_RPC_URL
+    contract = contract_address or DEFAULT_CONTRACT_ADDRESS
+
+    # Normalize hash format
+    if not content_hash.startswith("0x"):
+        content_hash = "0x" + content_hash
+
+    _print_header()
+    print(f"Contract:     {contract}")
+    print(f"Content Hash: {content_hash}")
+    print(f"RPC:          {rpc}")
+    print()
+
+    # Query on-chain certification by content hash (topic2)
+    print("Searching for certification by content hash...")
+    certification = _fetch_certification_by_content_hash(rpc, contract, content_hash)
+
+    if not certification:
+        return VerifyHashResult(
+            verified=False,
+            content_hash=content_hash,
+            certification=None,
+            message=(
+                f"❌ No certification found with content hash: {content_hash}\n\n"
+                "   Possible reasons:\n"
+                "   - The content was never certified\n"
+                "   - The certification is older than the search window\n"
+                "   - Wrong network (try mainnet vs sepolia)\n"
+            ),
+        )
+
+    _print_certification_for_network(certification, network)
+
+    return VerifyHashResult(
+        verified=True,
+        content_hash=content_hash,
+        certification=certification,
+        message=(
+            "\n  ✅ VERIFIED - Content hash found on-chain!\n\n"
+            f"  Certifier:   {certification.certifier_address}\n"
+            f"  Block:       {certification.block_number}\n"
+            f"  Transaction: {certification.transaction_hash}\n"
+        ),
+    )
+
+
+def _fetch_certification_by_content_hash(
+    rpc_url: str,
+    contract_address: str,
+    content_hash: str,
+) -> Optional[OnChainCertification]:
+    """Fetch certification by content hash (searches topic2)."""
+    current_block = cast_block_number(rpc_url)
+    from_block = current_block - DEFAULT_BLOCK_LOOKBACK
+    if from_block < 0:
+        from_block = 0
+
+    # Query with empty topic1 ("") to match any URL hash, filter by content hash
+    logs = cast_logs(
+        rpc_url,
+        contract_address,
+        EVENT_SIGNATURE,
+        "",  # Match any urlHash
+        from_block,
+        content_hash,  # Filter by contentHash
+    )
+
+    if not logs:
+        return None
+
+    return _parse_logs(logs)
+
+
+def _print_certification_for_network(cert: OnChainCertification, network: str) -> None:
+    """Print certification details with network-specific Etherscan link."""
+    print()
+    print("═" * 67)
+    print("                     ON-CHAIN CERTIFICATION")
+    print("═" * 67)
+    print(f"Content Hash: {cert.content_hash}")
+    print(f"Certifier:    {cert.certifier_address}")
+
+    if cert.timestamp and cert.timestamp > 0:
+        try:
+            dt = datetime.fromtimestamp(cert.timestamp)
+            print(f"Timestamp:    {dt.strftime('%Y-%m-%d %H:%M:%S')}")
+        except (ValueError, OSError):
+            print(f"Timestamp:    {cert.timestamp}")
+
+    print(f"Block:        {cert.block_number}")
+
+    if network == "mainnet":
+        print(f"Transaction:  https://etherscan.io/tx/{cert.transaction_hash}")
+    else:
+        print(f"Transaction:  https://sepolia.etherscan.io/tx/{cert.transaction_hash}")
+    print()

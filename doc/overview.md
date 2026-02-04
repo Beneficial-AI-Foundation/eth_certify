@@ -24,7 +24,7 @@
 
 > **⚠️ Proof of Concept (PoC)**
 > 
-> This system is a proof of concept demonstrating the feasibility of on-chain certification for formally verified code. It is functional but intended primarily for exploration and validation of the approach. Production use should consider additional security audits and operational hardening.
+> This system is a proof of concept demonstrating the feasibility of on-chain certification for formally verified code. It is functional but intended primarily for exploration and validation of the approach. 
 
 ---
 
@@ -154,17 +154,6 @@ Example workflow for projects that want to integrate certification into their ow
 
 ---
 
-### 3. Test Action Workflow (`test-action.yml`)
-
-Tests the certify action in both local (`act`) and CI environments.
-
-**Features:**
-- Spins up local Anvil blockchain for testing
-- Deploys test Certify contract
-- Supports both `act` (local) and GitHub Actions (CI) modes
-
----
-
 ## Badge System
 
 ### Badge Examples
@@ -186,7 +175,7 @@ Projects can display a BAIF Certified badge by adding this to their README:
 ### Badge Colors
 - 🟢 **Green** (`brightgreen`): 100% verified
 - 🟡 **Yellow** (`yellow`): 50-99% verified  
-- 🔴 **Red** (`red`): <50% verified
+- 🔴 **Red** (`red`): <50% verified (it makes little sense to certify red projects)
 
 ### Custom SVG vs Shields.io
 
@@ -258,52 +247,6 @@ This enables:
 - Full reproducibility of verification
 - Historical comparison of results across versions
 - Audit trail of what was verified
-
----
-
-## Key Fixes & Improvements
-
-### 1. Transaction Hash Extraction
-
-Fixed regex to handle Gnosis Safe outputs that may or may not include the `0x` prefix:
-
-```bash
-TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*(0x)?[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*Tx Hash:[[:space:]]*(0x)?([a-fA-F0-9]{64})$/0x\\2/')
-```
-
-### 2. Results JSON Parsing
-
-Fixed to handle both formats produced by `probe-verus verify`:
-
-**Format 1** (with `-a atoms.json`): Dictionary keyed by function name
-```json
-{
-  "function_name": { "verified": true, ... },
-  ...
-}
-```
-
-**Format 2** (without atoms): Object with summary
-```json
-{
-  "summary": { "verified": 72, "total": 72, ... }
-}
-```
-
-### 3. Cast Logs Parsing
-
-Fixed `verify.py` to handle updated `cast logs` output format where topics appear in array format:
-
-```
-topics: [
-    0x...
-    0x...
-]
-```
-
-### 4. Output Directory Creation
-
-Added `mkdir -p` to ensure output directory exists before `probe-verus` writes files.
 
 ---
 

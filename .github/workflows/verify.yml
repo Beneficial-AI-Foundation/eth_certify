@@ -1,0 +1,303 @@
+# Verify External Verus Projects
+#
+# This workflow verifies that a Verus project's results match its on-chain certification.
+# It re-runs probe-verus at a specific commit and verifies the hash matches Ethereum.
+#
+# Use this to independently verify that a certification is legitimate.
+
+name: Verify Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'GitHub repository URL (e.g., https://github.com/owner/repo)'
+        required: true
+        type: string
+      commit_id:
+        description: 'Git commit SHA to verify (must match the certified commit)'
+        required: true
+        type: string
+      project_path:
+        description: 'Path to Verus project within repo (default: . for root)'
+        required: false
+        default: '.'
+        type: string
+      package:
+        description: 'Package name for workspace projects (optional)'
+        required: false
+        default: ''
+        type: string
+      network:
+        description: 'Ethereum network to verify against'
+        required: false
+        default: 'mainnet'
+        type: choice
+        options:
+          - mainnet
+          - sepolia
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse repository info
+        id: repo
+        run: |
+          REPO_URL="${{ inputs.repo_url }}"
+          
+          # Extract owner/repo from URL
+          # Handles: https://github.com/owner/repo or https://github.com/owner/repo.git
+          REPO_PATH=$(echo "$REPO_URL" | sed -E 's|https://github.com/||' | sed 's|\.git$||' | sed 's|/$||')
+          OWNER=$(echo "$REPO_PATH" | cut -d'/' -f1)
+          REPO=$(echo "$REPO_PATH" | cut -d'/' -f2)
+          
+          echo "repo_path=$REPO_PATH" >> $GITHUB_OUTPUT
+          echo "owner=$OWNER" >> $GITHUB_OUTPUT
+          echo "repo=$REPO" >> $GITHUB_OUTPUT
+          
+          echo "Repository: $OWNER/$REPO"
+          echo "Commit: ${{ inputs.commit_id }}"
+
+      - name: Checkout certify repo
+        uses: actions/checkout@v4
+        with:
+          path: certify
+
+      - name: Checkout target project at specific commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.repo.outputs.repo_path }}
+          ref: ${{ inputs.commit_id }}
+          path: target
+
+      - name: Verify commit SHA
+        working-directory: target
+        run: |
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          EXPECTED_SHA="${{ inputs.commit_id }}"
+          
+          echo "Expected commit: $EXPECTED_SHA"
+          echo "Actual commit:   $ACTUAL_SHA"
+          
+          # Handle both full and short SHAs
+          if [[ ! "$ACTUAL_SHA" == "$EXPECTED_SHA"* ]] && [[ ! "$EXPECTED_SHA" == "$ACTUAL_SHA"* ]]; then
+            echo "::error::Commit SHA mismatch!"
+            exit 1
+          fi
+          
+          echo "✅ Commit SHA verified"
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1: Re-run Verus Verification
+      # ═══════════════════════════════════════════════════════════════
+      - name: Run Verus verification
+        uses: beneficial-ai-foundation/probe-verus/action@v1
+        id: verify
+        with:
+          project-path: target/${{ inputs.project_path }}
+          package: ${{ inputs.package }}
+          output-dir: ./output
+
+      - name: Verification summary
+        run: |
+          echo "## Re-Verification Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository**: ${{ steps.repo.outputs.repo_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ inputs.commit_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Verified**: ${{ steps.verify.outputs.verified-count }} / ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Results file**: ${{ steps.verify.outputs.results-file }}" >> $GITHUB_STEP_SUMMARY
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 2: Verify Hash Against Ethereum
+      # ═══════════════════════════════════════════════════════════════
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install certify dependencies
+        working-directory: certify
+        run: uv sync
+
+      - name: Compute content hash
+        id: hash
+        run: |
+          RESULTS_FILE="./output/results.json"
+          
+          if [ ! -f "$RESULTS_FILE" ]; then
+            echo "::error::Results file not found: $RESULTS_FILE"
+            exit 1
+          fi
+          
+          # Compute keccak256 hash of results.json
+          CONTENT_HASH=$(cast keccak < "$RESULTS_FILE")
+          
+          echo "content_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
+          echo "Content Hash: $CONTENT_HASH"
+
+      - name: Verify against on-chain certification
+        id: verify-onchain
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          CERTIFY_ADDRESS: ${{ inputs.network == 'mainnet' && vars.MAINNET_CERTIFIER_ADDRESS || vars.SEPOLIA_CERTIFIER_ADDRESS }}
+        run: |
+          NETWORK="${{ inputs.network }}"
+          CONTENT_HASH="${{ steps.hash.outputs.content_hash }}"
+          
+          # Determine RPC URL and contract address
+          if [ "$NETWORK" = "mainnet" ]; then
+            RPC_URL="${MAINNET_RPC_URL:-https://ethereum-rpc.publicnode.com}"
+            CONTRACT_ADDR="${CERTIFY_ADDRESS:-}"
+          else
+            RPC_URL="${SEPOLIA_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
+            CONTRACT_ADDR="${CERTIFY_ADDRESS:-0x125721f8a45bbABC60aDbaaF102a94d9cae59238}"
+          fi
+          
+          # WebsiteCertified event signature
+          # event WebsiteCertified(bytes32 indexed urlHash, bytes32 indexed contentHash, address indexed sender, uint256 timestamp, string description)
+          EVENT_SIG="0xe902b6df7966d5f61a8031b28d5925fb223a483f4f9782928884cf243abec003"
+          
+          echo "╔══════════════════════════════════════════════════════════════════╗"
+          echo "║               ON-CHAIN CERTIFICATION VERIFICATION                ║"
+          echo "╚══════════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "Network:      $NETWORK"
+          echo "RPC URL:      $RPC_URL"
+          echo "Contract:     $CONTRACT_ADDR"
+          echo "Content Hash: $CONTENT_HASH"
+          echo ""
+          
+          if [ -z "$CONTRACT_ADDR" ]; then
+            echo "::error::Contract address not configured for $NETWORK"
+            echo "verified=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Get current block and calculate from_block (look back ~50000 blocks)
+          CURRENT_BLOCK=$(cast block-number --rpc-url "$RPC_URL")
+          FROM_BLOCK=$((CURRENT_BLOCK - 50000))
+          if [ $FROM_BLOCK -lt 0 ]; then
+            FROM_BLOCK=0
+          fi
+          
+          echo "Searching blocks $FROM_BLOCK to $CURRENT_BLOCK..."
+          echo ""
+          
+          # Query for WebsiteCertified events with matching contentHash (topic2)
+          # Note: topic1 is urlHash, topic2 is contentHash
+          set +e
+          LOGS=$(cast logs \
+            --rpc-url "$RPC_URL" \
+            --from-block "$FROM_BLOCK" \
+            --address "$CONTRACT_ADDR" \
+            "$EVENT_SIG" \
+            "" \
+            "$CONTENT_HASH" \
+            2>&1)
+          CAST_EXIT=$?
+          set -e
+          
+          if [ $CAST_EXIT -ne 0 ] || [ -z "$LOGS" ]; then
+            echo "No certification found with content hash: $CONTENT_HASH"
+            echo ""
+            echo "verified=false" >> $GITHUB_OUTPUT
+            echo "onchain_hash=" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "═══════════════════════════════════════════════════════════════════"
+          echo "                     CERTIFICATION FOUND"
+          echo "═══════════════════════════════════════════════════════════════════"
+          
+          # Extract transaction hash from logs
+          TX_HASH=$(echo "$LOGS" | grep -Eio 'transactionHash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
+          BLOCK_NUM=$(echo "$LOGS" | grep -Eio 'blockNumber:[[:space:]]*[0-9]+' | head -1 | sed -E 's/.*([0-9]+)/\1/')
+          
+          # Extract certifier address from topic3 (padded to 32 bytes)
+          CERTIFIER=$(echo "$LOGS" | grep -Eio '0x[0-9a-fA-F]{64}' | tail -1)
+          if [ -n "$CERTIFIER" ]; then
+            # Take last 40 chars for address
+            CERTIFIER="0x${CERTIFIER: -40}"
+          fi
+          
+          echo "Content Hash: $CONTENT_HASH"
+          echo "Certifier:    $CERTIFIER"
+          echo "Block:        $BLOCK_NUM"
+          echo "Transaction:  $TX_HASH"
+          
+          if [ "$NETWORK" = "mainnet" ]; then
+            echo "Etherscan:    https://etherscan.io/tx/$TX_HASH"
+            echo "etherscan_url=https://etherscan.io/tx/$TX_HASH" >> $GITHUB_OUTPUT
+          else
+            echo "Etherscan:    https://sepolia.etherscan.io/tx/$TX_HASH"
+            echo "etherscan_url=https://sepolia.etherscan.io/tx/$TX_HASH" >> $GITHUB_OUTPUT
+          fi
+          
+          echo ""
+          echo "═══════════════════════════════════════════════════════════════════"
+          echo "                     ✅ VERIFICATION PASSED"
+          echo "═══════════════════════════════════════════════════════════════════"
+          echo ""
+          echo "The computed hash matches an on-chain certification!"
+          
+          echo "verified=true" >> $GITHUB_OUTPUT
+          echo "onchain_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
+          echo "tx_hash=$TX_HASH" >> $GITHUB_OUTPUT
+          echo "certifier=$CERTIFIER" >> $GITHUB_OUTPUT
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 3: Summary
+      # ═══════════════════════════════════════════════════════════════
+      - name: Final summary
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Certification Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | ${{ steps.repo.outputs.repo_path }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ inputs.commit_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Network | ${{ inputs.network }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Verified Functions | ${{ steps.verify.outputs.verified-count }} / ${{ steps.verify.outputs.total-functions }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Computed Hash | \`${{ steps.hash.outputs.content_hash }}\` |" >> $GITHUB_STEP_SUMMARY
+          
+          TX_HASH="${{ steps.verify-onchain.outputs.tx_hash }}"
+          ETHERSCAN_URL="${{ steps.verify-onchain.outputs.etherscan_url }}"
+          CERTIFIER="${{ steps.verify-onchain.outputs.certifier }}"
+          
+          if [ -n "$TX_HASH" ]; then
+            echo "| Transaction | [$TX_HASH]($ETHERSCAN_URL) |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "$CERTIFIER" ]; then
+            echo "| Certifier | \`$CERTIFIER\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.verify-onchain.outputs.verified }}" = "true" ]; then
+            echo "### ✅ Verification Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The results.json hash computed from this commit matches the on-chain certification." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "This confirms that:" >> $GITHUB_STEP_SUMMARY
+            echo "1. The code at commit \`${{ inputs.commit_id }}\` was certified" >> $GITHUB_STEP_SUMMARY
+            echo "2. The Verus verification results are reproducible" >> $GITHUB_STEP_SUMMARY
+            echo "3. The certification is legitimate" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Verification Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The computed hash does not match any on-chain certification." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Possible reasons:" >> $GITHUB_STEP_SUMMARY
+            echo "- Wrong commit SHA (check the certified commit in the certification registry)" >> $GITHUB_STEP_SUMMARY
+            echo "- Wrong network (certification may be on mainnet vs sepolia)" >> $GITHUB_STEP_SUMMARY
+            echo "- No certification exists for this commit" >> $GITHUB_STEP_SUMMARY
+            echo "- Verus version differences may produce different results" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -72,22 +72,34 @@ def cast_logs(
     event_sig: str,
     topic1: str,
     from_block: int,
+    topic2: Optional[str] = None,
 ) -> Optional[str]:
-    """Query event logs from the blockchain."""
+    """Query event logs from the blockchain.
+
+    Args:
+        rpc_url: RPC endpoint URL
+        address: Contract address
+        event_sig: Event signature hash
+        topic1: First indexed topic (or empty string "" to match any)
+        from_block: Starting block number
+        topic2: Optional second indexed topic
+    """
     try:
-        output = run_cast(
-            [
-                "logs",
-                "--rpc-url",
-                rpc_url,
-                "--from-block",
-                str(from_block),
-                "--address",
-                address,
-                event_sig,
-                topic1,
-            ]
-        )
+        args = [
+            "logs",
+            "--rpc-url",
+            rpc_url,
+            "--from-block",
+            str(from_block),
+            "--address",
+            address,
+            event_sig,
+            topic1,
+        ]
+        if topic2 is not None:
+            args.append(topic2)
+
+        output = run_cast(args)
         return output if output else None
     except subprocess.CalledProcessError:
         return None
