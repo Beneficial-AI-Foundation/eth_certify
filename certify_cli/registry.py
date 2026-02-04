@@ -20,6 +20,7 @@ class CertificationEntry:
     etherscan_url: str
     verified: int
     total: int
+    commit_sha: Optional[str] = None
     verus_version: Optional[str] = None
     rust_version: Optional[str] = None
     results_file: Optional[str] = None
@@ -44,6 +45,7 @@ def update_registry(
     tx_hash: str,
     content_hash: str,
     base_dir: Path = Path("certifications"),
+    commit_sha: Optional[str] = None,
     verus_version: Optional[str] = None,
     rust_version: Optional[str] = None,
     results_file: Optional[str] = None,
@@ -68,6 +70,7 @@ def update_registry(
         tx_hash: Transaction hash
         content_hash: Content hash that was certified
         base_dir: Base directory for certifications
+        commit_sha: Git commit SHA that was certified
         verus_version: Verus version used for verification
         rust_version: Rust toolchain version used
         results_file: Path to verification results JSON to store
@@ -123,6 +126,7 @@ def update_registry(
             etherscan_url=etherscan_url,
             verified=verified,
             total=total,
+            commit_sha=commit_sha,
             verus_version=verus_version,
             rust_version=rust_version,
             results_file=stored_results_path,
@@ -260,6 +264,8 @@ def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
     }
 
     # Add optional fields if present
+    if entry.commit_sha:
+        new_entry["commit_sha"] = entry.commit_sha
     if entry.verus_version:
         new_entry["verus_version"] = entry.verus_version
     if entry.rust_version:
@@ -294,6 +300,12 @@ def _create_readme(
     if entry.results_file:
         results_link = f"\n- **Results**: [{entry.results_file}]({entry.results_file})"
 
+    # Build commit info
+    commit_info = ""
+    if entry.commit_sha:
+        short_sha = entry.commit_sha[:7] if len(entry.commit_sha) > 7 else entry.commit_sha
+        commit_info = f"\n- **Commit**: [`{short_sha}`](https://github.com/{repo_path}/commit/{entry.commit_sha})"
+
     readme_content = f"""# BAIF Certification: {repo_path}
 
 <p align="center">
@@ -319,6 +331,7 @@ Add this to your project's README:
 ## Latest Certification
 
 - **Verified**: {entry.verified}/{entry.total} functions
+- **Ref**: {entry.ref}{commit_info}
 - **Network**: {entry.network}
 - **Transaction**: [{entry.tx_hash}]({entry.etherscan_url})
 - **Content Hash**: `{entry.content_hash}`{results_link}

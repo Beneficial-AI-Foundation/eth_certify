@@ -81,6 +81,14 @@ jobs:
           ref: ${{ inputs.ref }}
           path: target
 
+      - name: Get commit SHA
+        id: commit
+        working-directory: target
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "Commit SHA: $COMMIT_SHA"
+
       # ═══════════════════════════════════════════════════════════════
       # STEP 1: Run Verus Verification
       # ═══════════════════════════════════════════════════════════════
@@ -98,6 +106,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Repository**: ${{ steps.repo.outputs.repo_path }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Ref**: ${{ inputs.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ steps.commit.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Verified**: ${{ steps.verify.outputs.verified-count }} / ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
 
       # ═══════════════════════════════════════════════════════════════
@@ -190,6 +199,7 @@ jobs:
           CMD="$CMD --total \"${{ steps.verify.outputs.total-functions }}\""
           CMD="$CMD --tx-hash \"${{ steps.certify.outputs.tx_hash }}\""
           CMD="$CMD --content-hash \"${{ steps.certify.outputs.content_hash }}\""
+          CMD="$CMD --commit-sha \"${{ steps.commit.outputs.sha }}\""
           
           # Add optional toolchain info if available
           VERUS_VERSION="${{ steps.verify.outputs.verus-version }}"

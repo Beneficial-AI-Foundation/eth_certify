@@ -148,6 +148,12 @@ def main() -> int:
         help="Content hash that was certified",
     )
     registry_parser.add_argument(
+        "--commit-sha",
+        type=str,
+        default=None,
+        help="Git commit SHA that was certified",
+    )
+    registry_parser.add_argument(
         "--verus-version",
         type=str,
         default=None,
@@ -303,6 +309,7 @@ def _handle_update_registry(args: argparse.Namespace) -> int:
         tx_hash=args.tx_hash,
         content_hash=args.content_hash,
         base_dir=Path(args.base_dir),
+        commit_sha=args.commit_sha,
         verus_version=args.verus_version,
         rust_version=args.rust_version,
         results_file=args.results_file,
