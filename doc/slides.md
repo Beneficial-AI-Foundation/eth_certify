@@ -473,7 +473,7 @@ All contract source code is verified on Etherscan.
 
 **The honest statement:**
 > We have built the **infrastructure** for certification.
-> We have not yet solved the **epistemology** of what makes a certification meaningful.
+> We should find a more meaningful definition of what is certification.
 
 ---
 
@@ -493,7 +493,7 @@ The idea: ship a Docker image per project so anyone can reproduce verification l
                       pinned source)
 ```
 
-Sounds appealing. But it introduces a set of problems far heavier
+Sounds easy. But it introduces a set of problems far heavier
 than the one it solves.
 
 ---
@@ -507,15 +507,14 @@ But projects are not static artifacts. They are living codebases:
 - Dependency updates, toolchain upgrades
 - Multiple verified versions over time
 
-Storing a snapshot is easy. **Tracking a living project is a full-time job.**
+Storing a snapshot is easy. Tracking a living project is not.
 
 We would need to:
 - Mirror repositories (or fork them)
 - Monitor upstream changes
-- Rebuild images on every meaningful commit
 - Decide which versions to keep, which to retire
 
-This is a project registry, not a certification service.
+This becomes a project registry, not a certification service.
 
 ---
 
@@ -605,7 +604,7 @@ We don't need to **store** projects. We need to **point at** them.
   └─────────────────────────────────────────────────┘
 ```
 
-This is everything needed to reproduce the verification:
+This should suffice in order to reproduce the verification:
 - **Commit SHA** pins the exact source code (hosted by the project)
 - **Verus/Rust versions** pin the exact toolchain
 - **Content hash** pins the expected result (anchored on-chain)
@@ -616,7 +615,8 @@ No Docker image required. No BAIF-hosted copy of the code.
 
 # What If the Upstream Repo Disappears?
 
-Fair concern. But Docker images don't solve this either — they just move the problem.
+Docker images don't solve this either — they just move the problem:
+- we cannot show that the code we copied is the one having been deleted
 
 **What we already have:**
 - `results/{timestamp}.json` archived in our repo
@@ -819,7 +819,7 @@ could BAIF lie and never get caught?
   └─────────────────────────────────────────────────────────────┘
 ```
 
-**The Dockerfile is readable. The inputs are committed. Anyone can re-run.**
+**The GitHub verification workflow is readable. The inputs are committed. Anyone can re-run.**
 
 The cost of lying (reputation destruction) exceeds the benefit.
 Decentralized compute would be solving a problem we don't have.
@@ -836,17 +836,11 @@ Stronger guarantees might be needed if:
 - BAIF's reputation isn't sufficient collateral
 
 For formal verification of open-source code:
-**Reproducibility + reputation + threat of being caught is enough.**
+**Reproducibility + reputation + threat of being caught should be enough.**
 
 ---
 
 <!-- _class: lead -->
-
-# Future Direction: Pi-Squared
-
-From attestation to self-certifying proofs
-
----
 
 # The Pi-Squared Vision
 
@@ -865,60 +859,9 @@ Grigore Rosu's Pi² project aims to make **any computation** produce checkable p
 
 ---
 
-# Pi-Squared vs Decentralized Compute
+# Pi-Squared proof certificate model
 
-| Approach | How It Works | Trust Model |
-|----------|--------------|-------------|
-| **Decentralized compute** | N nodes re-execute, consensus | Trust majority of nodes |
-| **Pi-squared** | 1 party executes + proves, anyone verifies | Trust ~200 line checker + crypto |
-
-Pi² is **not** about many nodes running computation.
-It's about **one execution producing a self-certifying proof**.
-
-Same philosophy as Rocq/Lean kernels, but:
-- Works for *any* language (via K framework)
-- Proofs are **succinct** (ZK compressed)
-- Verification is **constant-time**
-
----
-
-# What This Would Mean for BAIF
-
-If Pi²'s vision materializes for verification tools:
-
-```
-  Current:
-  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-  │  Run Verus   │────▶│  Record hash │────▶│  Trust BAIF  │
-  │              │     │  on-chain    │     │  ran it      │
-  └──────────────┘     └──────────────┘     └──────────────┘
-
-  Future (aspirational):
-  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-  │  Run Verus   │────▶│  Produce ZK  │────▶│  Anyone can  │
-  │  (via K)     │     │  proof       │     │  verify      │
-  └──────────────┘     └──────────────┘     └──────────────┘
-```
-
-The certificate would be **self-certifying** — no trust in BAIF required.
-
-**Caveat:** Verus/Z3 aren't in the K framework today.
-This is a long-term research direction, not a near-term solution.
-
----
-
-# Summary: Honest Positioning
-
-| What We Have | What We Don't Have (Yet) |
-|--------------|--------------------------|
-| Attestation by BAIF | Self-certifying proof certificates |
-| Reproducible verification | ZK proofs of verification |
-| Tamper-evident records | Specs included in certification |
-| Deterrence via transparency | Prevention via decentralized execution |
-
-**The path forward:**
-1. Include spec summaries in certifications (semantic content)
-2. Watch Pi²/similar projects for proof export from SMT-based tools
-3. Maintain honesty: we provide *attestation*, not *proof certificates*
-
----
+- seems to go beyong Rocq's proof certificate model in this respect:
+    - we have a 10GB proof object, then there's a verification cost, say O(proof_size), to run coqchk on this proof term
+    - Pi-Squared apparently adds cryptographic verifiability on top of the proof certificate model: 
+    ZK proofs have the property that verification time is constant regardless of what's proved
