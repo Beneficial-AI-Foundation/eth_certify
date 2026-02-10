@@ -145,20 +145,6 @@ function certifyWebsite(
 
 ---
 
-# Why Ethereum?
-
-| Property | How Ethereum Provides It |
-|---|---|
-| **Immutability** | Proof-of-stake consensus; ~1M validators |
-| **Availability** | Thousands of full nodes; public RPC endpoints |
-| **Timestamping** | Block timestamps with economic finality |
-| **Permissionless verification** | Anyone can query via `eth_getLogs` |
-| **Censorship resistance** | No single party can delete records |
-
-The contract is verified on Etherscan — anyone can read the source.
-
----
-
 <!-- _class: lead -->
 
 # GitHub Workflows
@@ -169,106 +155,18 @@ Automating the certification and verification pipeline
 
 # Workflow Overview
 
-Two main workflows, one reusable action:
+Two main workflows:
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| **certify-external.yml** | Manual dispatch | Verify + certify any Verus project |
-| **verify.yml** | Manual dispatch | Independently verify a certification |
-| **action/action.yml** | Used by other repos | Reusable composite action for certification |
-
-Plus CI (`ci.yml`) for linting and testing the certify repo itself.
+| Certification workflow | Manual dispatch | Verify + certify any Verus project |
+| Verification workflow | Manual dispatch | Independently verify a certification |
 
 ---
 
 # Certification Workflow
 
-**`certify-external.yml`** — end-to-end: verify code, certify on-chain, update registry
-
-**Inputs** (manual dispatch):
-- Repository URL, project path, git ref
-- Package name (for Rust workspaces)
-- Network: `mainnet` or `sepolia`
-
-```
-Trigger ──▶ Step 1: Verify ──▶ Step 2: Certify ──▶ Step 3: Registry ──▶ Step 4: Commit
-```
-
----
-
-# Certification — Step 1: Verify
-
-Uses the `probe-verus/action@v1` reusable action:
-
-```yaml
-- name: Run Verus verification
-  uses: beneficial-ai-foundation/probe-verus/action@v1
-  with:
-    project-path: target/${{ inputs.project_path }}
-    package: ${{ inputs.package }}
-    output-dir: ./output
-```
-
-**What it does:**
-- Clones the target repo at the specified ref
-- Installs the Verus toolchain (version from `Cargo.toml`)
-- Runs `probe-verus atomize` → function inventory
-- Runs `probe-verus verify` → `results.json`
-
-**Outputs:** `verified-count`, `total-functions`, `verus-version`, `rust-version`
-
----
-
-# Certification — Step 2: Certify On-Chain
-
-```yaml
-- name: Certify on ${{ inputs.network }}
-  env:
-    MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-    MAINNET_PRIVATE_KEY: ${{ secrets.MAINNET_PRIVATE_KEY }}
-    CERTIFY_ADDRESS: ${{ vars.MAINNET_CERTIFIER_ADDRESS }}
-  run: |
-    CMD="uv run python3 -m certify_cli certify --network $NETWORK"
-    CMD="$CMD --safe \"$SAFE_ADDR\" --execute"
-    eval $CMD
-```
-
-**What it does:**
-- Computes `keccak256(results.json)`
-- Builds a Gnosis Safe transaction (for mainnet)
-- Signs with the private key from GitHub Secrets
-- Submits to Ethereum
-
-**Outputs:** `tx_hash`, `content_hash`, `etherscan_url`
-
----
-
-# Certification — Step 3: Update Registry
-
-```yaml
-- name: Update certification registry
-  run: |
-    uv run python3 -m certify_cli update-registry \
-      --cert-id "$CERT_ID" --repo "$REPO" --ref "$REF" \
-      --network "$NETWORK" --verified "$VERIFIED" --total "$TOTAL" \
-      --tx-hash "$TX_HASH" --content-hash "$CONTENT_HASH" \
-      --commit-sha "$SHA" --verus-version "$VERUS_VERSION"
-```
-
-**Creates/updates** under `certifications/{project-id}/`:
-
-| File | Purpose |
-|---|---|
-| `badge.json` | Shields.io dynamic endpoint |
-| `badge.svg` | Pre-rendered SVG badge |
-| `history.json` | Full certification audit trail |
-| `results/{timestamp}.json` | Archived verification results |
-
-Then commits and pushes to the repository.
-
----
-
-# Certification — Full Pipeline
+**`certify-external.yml`** — triggered manually with a repo URL, ref, and network.
 
 ```
 ┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
@@ -283,136 +181,41 @@ Then commits and pushes to the repository.
                                              tx: 0x09f0ee…
 ```
 
-The entire pipeline runs in a single GitHub Actions job — no human intervention.
+| Step | What happens | Tool |
+|---|---|---|
+| **Verify** | Install Verus, run `probe-verus verify` → `results.json` | `probe-verus/action@v1` |
+| **Certify** | `keccak256(results.json)` → sign via Gnosis Safe → submit to Ethereum | `certify_cli certify` |
+| **Registry** | Generate badge, append to `history.json`, archive results | `certify_cli update-registry` |
+| **Commit** | Push updated certification files to this repo | `git commit && push` |
+
+Single GitHub Actions job — no human intervention after dispatch.
 
 ---
 
 # Verification Workflow
 
-**`verify.yml`** — independently verify that a certification is legitimate
+**`verify.yml`** — triggered manually with a repo URL, commit SHA, and network.
 
-**Inputs** (manual dispatch):
-- Repository URL, commit SHA, project path
-- Package name, network
-
-**Three levels of verification:**
-
-| Level | What It Checks |
-|---|---|
-| **Stored results** | `keccak256(stored results.json)` matches on-chain `contentHash` |
-| **On-chain** | Queries Ethereum for the certification event |
-| **Fresh verification** | Re-runs Verus and compares results with certified counts |
-
----
-
-# Verification — Step 1: Registry Lookup
-
-```yaml
-- name: Look up certification in registry
-  run: |
-    CERT=$(jq -r --arg commit "$COMMIT_ID" --arg network "$NETWORK" \
-      '.certifications[] | select(.commit_sha == $commit
-                           and .network == $network)' \
-      "$HISTORY_FILE")
+```
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│  Lookup cert  │     │  Hash check   │     │  On-chain     │     │  Fresh Verus  │
+│  in registry  │────▶│  stored file  │────▶│  event query  │────▶│  re-run       │
+│               │     │  vs on-chain  │     │               │     │  & compare    │
+│  history.json │     │  keccak256    │     │  eth_getLogs  │     │  probe-verus  │
+└───────────────┘     └───────────────┘     └───────────────┘     └───────────────┘
 ```
 
-Finds the certification record matching the commit SHA and network.
-Extracts: `content_hash`, `tx_hash`, `verified`, `total`, `results_file`.
+| Step | What it checks | Catches |
+|---|---|---|
+| **Registry lookup** | Find certification by commit SHA + network | Missing certifications |
+| **Hash verification** | `keccak256(stored results.json)` = on-chain `contentHash`? | Tampered results |
+| **On-chain check** | Query Ethereum for the certification event | Fake/deleted certifications |
+| **Fresh re-verification** | Re-run Verus, compare verified/total counts | Non-reproducible results |
+
+**Outcome:** Passed (all match), Partial (authentic but counts differ), or Failed.
 
 ---
 
-# Verification — Step 2: Hash Verification
-
-```yaml
-- name: Verify stored results hash
-  run: |
-    COMPUTED_HASH=$(cast keccak < "$RESULTS_FILE")
-    if [ "$COMPUTED_HASH" = "$EXPECTED_HASH" ]; then
-      echo "Stored results hash matches certification record"
-    fi
-```
-
-**What it checks:**
-1. Reads the stored `results.json` from the certification archive
-2. Computes `keccak256` of the file contents
-3. Compares with the on-chain `contentHash`
-
-If they match: the results file has not been tampered with since certification.
-
----
-
-# Verification — Step 3: On-Chain Check
-
-```yaml
-- name: Verify on-chain certification
-  run: |
-    uv run python -m certify_cli verify-hash \
-      "$EXPECTED_HASH" --network "$NETWORK"
-```
-
-Queries the Ethereum event log for a `WebsiteCertified` event
-matching the expected content hash.
-
-**Confirms:**
-- The certification transaction exists on-chain
-- The content hash was recorded by the BAIF Safe
-- The block timestamp is authentic
-
----
-
-# Verification — Step 4: Fresh Re-Verification
-
-```yaml
-- name: Run fresh Verus verification
-  uses: beneficial-ai-foundation/probe-verus/action@v1
-  with:
-    project-path: target/${{ inputs.project_path }}
-```
-
-```yaml
-- name: Compare verification results
-  run: |
-    if [ "$CERTIFIED_VERIFIED" = "$FRESH_VERIFIED" ] &&
-       [ "$CERTIFIED_TOTAL" = "$FRESH_TOTAL" ]; then
-      echo "Fresh verification matches certified results"
-    fi
-```
-
-**Note:** Exact hash may differ (non-deterministic timestamps/ordering),
-but the semantic result (verified/total counts) should match.
-
----
-
-# Verification — Outcome Matrix
-
-| Stored Hash | On-Chain | Fresh Run | Verdict |
-|---|---|---|---|
-| Match | Found | Match | **Passed** — certification is authentic and reproducible |
-| Match | Found | Differ | **Partial** — authentic but Verus version may differ |
-| Mismatch | — | — | **Failed** — results may have been tampered with |
-| — | Not found | — | **Failed** — certification not on blockchain |
-
----
-
-# The Reusable Action
-
-**`action/action.yml`** — lets any BAIF repository certify content in their own workflows:
-
-```yaml
-- uses: Beneficial-AI-Foundation/eth_certify/action@main
-  with:
-    source: ./output/results.json
-    description: "My project: 72/72 verified"
-    network: mainnet
-    rpc-url: ${{ secrets.MAINNET_RPC_URL }}
-    private-key: ${{ secrets.PRIVATE_KEY }}
-    certify-address: ${{ vars.CERTIFY_ADDRESS }}
-    safe-address: ${{ vars.SAFE_ADDRESS }}
-```
-
-**Outputs:** `tx-hash`, `content-hash`, `etherscan-url`
-
----
 
 # Badge System
 
@@ -469,7 +272,7 @@ All contract source code is verified on Etherscan.
 **What it does NOT prove:**
 - That the specs capture what users actually care about
 - That specifications are complete (they may miss properties)
-- That external dependencies or FFI are correct
+- That external dependencies are correct
 
 **The honest statement:**
 > We have built the **infrastructure** for certification.
@@ -493,7 +296,7 @@ The idea: ship a Docker image per project so anyone can reproduce verification l
                       pinned source)
 ```
 
-Sounds easy. But it introduces a set of problems far heavier
+Sounds easy. But it introduces a set of problems heavier
 than the one it solves.
 
 ---
@@ -533,26 +336,6 @@ BAIF's core mission: **certify formally verified code on-chain.**
 
 Every hour spent maintaining Docker infrastructure is an hour
 **not** spent improving verification tooling, spec quality, or the certification protocol.
-
----
-
-# Problem 3: Projects Are Never "Done"
-
-A Docker image captures a moment in time. But verified projects continue to exist:
-
-```
-  v1.0 ──▶ v1.1 (patch) ──▶ v1.2 (new feature) ──▶ v2.0 (rewrite)
-   │            │                  │                      │
-   ▼            ▼                  ▼                      ▼
-  image?      image?             image?                 image?
-```
-
-**Each version** potentially needs:
-- Its own image (different deps, different Verus version)
-- Re-certification when specs change
-- Retirement when superseded
-
-We'd be maintaining a growing fleet of images with no natural stopping point.
 
 ---
 
@@ -769,7 +552,7 @@ Capability to verify vs. verification actually happening
 
 ---
 
-# Two Kinds of Assurance
+# Two Kinds of Assurance (as Shaowei summarised it)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -786,7 +569,7 @@ Capability to verify vs. verification actually happening
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**The trust gap:** If BAIF publishes a Dockerfile but nobody runs it,
+**The trust gap:** If BAIF publishes a Github workflow but nobody runs it,
 could BAIF lie and never get caught?
 
 ---
@@ -807,7 +590,7 @@ could BAIF lie and never get caught?
 
 ---
 
-# Why Deterrence Is Sufficient for BAIF
+# Why Deterrence could be Sufficient for BAIF
 
 ```
   If BAIF lies:
@@ -859,9 +642,209 @@ Grigore Rosu's Pi² project aims to make **any computation** produce checkable p
 
 ---
 
-# Pi-Squared proof certificate model
+# Pi-Squared vs Rocq: Proof Certificate Costs
 
-- seems to go beyong Rocq's proof certificate model in this respect:
-    - we have a 10GB proof object, then there's a verification cost, say O(proof_size), to run coqchk on this proof term
-    - Pi-Squared apparently adds cryptographic verifiability on top of the proof certificate model: 
-    ZK proofs have the property that verification time is constant regardless of what's proved
+Rocq already has proof certificates — Pi-Squared's advance is making verification **cheap**.
+
+| | Rocq (`coqchk`) | Pi-Squared |
+|---|---|---|
+| **Proof artifact** | Proof term (can be multi-GB) | ZK-SNARK (constant size) |
+| **Verification cost** | O(proof size) — must traverse the entire term | O(1) — constant-time ZK verification |
+| **Verifier complexity** | ~5K line type-checker | ~200 line SNARK checker |
+| **Trust base** | Type theory is sound | ZK cryptography is sound |
+
+**The key insight:** Rocq already separates proving from checking,
+but checking still scales linearly with proof size.
+Pi-Squared adds a cryptographic compression layer on top:
+the ZK proof *of* the proof is constant-size and constant-time to verify,
+regardless of the complexity of the underlying mathematical proof.
+
+
+<!-- _class: lead -->
+
+# Backup Slides
+
+Detailed workflow steps
+
+---
+
+# Certification — Step 1: Verify
+
+Uses the `probe-verus/action@v1` reusable action:
+
+```yaml
+- name: Run Verus verification
+  uses: beneficial-ai-foundation/probe-verus/action@v1
+  with:
+    project-path: target/${{ inputs.project_path }}
+    package: ${{ inputs.package }}
+    output-dir: ./output
+```
+
+**What it does:**
+- Clones the target repo at the specified ref
+- Installs the Verus toolchain (version from `Cargo.toml`)
+- Runs `probe-verus atomize` → function inventory
+- Runs `probe-verus verify` → `results.json`
+
+**Outputs:** `verified-count`, `total-functions`, `verus-version`, `rust-version`
+
+---
+
+# Certification — Step 2: Certify On-Chain
+
+```yaml
+- name: Certify on ${{ inputs.network }}
+  env:
+    MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+    MAINNET_PRIVATE_KEY: ${{ secrets.MAINNET_PRIVATE_KEY }}
+    CERTIFY_ADDRESS: ${{ vars.MAINNET_CERTIFIER_ADDRESS }}
+  run: |
+    CMD="uv run python3 -m certify_cli certify --network $NETWORK"
+    CMD="$CMD --safe \"$SAFE_ADDR\" --execute"
+    eval $CMD
+```
+
+**What it does:**
+- Computes `keccak256(results.json)`
+- Builds a Gnosis Safe transaction (for mainnet)
+- Signs with the private key from GitHub Secrets
+- Submits to Ethereum
+
+**Outputs:** `tx_hash`, `content_hash`, `etherscan_url`
+
+---
+
+# Certification — Step 3: Update Registry
+
+```yaml
+- name: Update certification registry
+  run: |
+    uv run python3 -m certify_cli update-registry \
+      --cert-id "$CERT_ID" --repo "$REPO" --ref "$REF" \
+      --network "$NETWORK" --verified "$VERIFIED" --total "$TOTAL" \
+      --tx-hash "$TX_HASH" --content-hash "$CONTENT_HASH" \
+      --commit-sha "$SHA" --verus-version "$VERUS_VERSION"
+```
+
+**Creates/updates** under `certifications/{project-id}/`:
+
+| File | Purpose |
+|---|---|
+| `badge.json` | Shields.io dynamic endpoint |
+| `badge.svg` | Pre-rendered SVG badge |
+| `history.json` | Full certification audit trail |
+| `results/{timestamp}.json` | Archived verification results |
+
+Then commits and pushes to the repository.
+
+---
+
+# Verification — Step 1: Registry Lookup
+
+```yaml
+- name: Look up certification in registry
+  run: |
+    CERT=$(jq -r --arg commit "$COMMIT_ID" --arg network "$NETWORK" \
+      '.certifications[] | select(.commit_sha == $commit
+                           and .network == $network)' \
+      "$HISTORY_FILE")
+```
+
+Finds the certification record matching the commit SHA and network.
+Extracts: `content_hash`, `tx_hash`, `verified`, `total`, `results_file`.
+
+---
+
+# Verification — Step 2: Hash Verification
+
+```yaml
+- name: Verify stored results hash
+  run: |
+    COMPUTED_HASH=$(cast keccak < "$RESULTS_FILE")
+    if [ "$COMPUTED_HASH" = "$EXPECTED_HASH" ]; then
+      echo "Stored results hash matches certification record"
+    fi
+```
+
+**What it checks:**
+1. Reads the stored `results.json` from the certification archive
+2. Computes `keccak256` of the file contents
+3. Compares with the on-chain `contentHash`
+
+If they match: the results file has not been tampered with since certification.
+
+---
+
+# Verification — Step 3: On-Chain Check
+
+```yaml
+- name: Verify on-chain certification
+  run: |
+    uv run python -m certify_cli verify-hash \
+      "$EXPECTED_HASH" --network "$NETWORK"
+```
+
+Queries the Ethereum event log for a `WebsiteCertified` event
+matching the expected content hash.
+
+**Confirms:**
+- The certification transaction exists on-chain
+- The content hash was recorded by the BAIF Safe
+- The block timestamp is authentic
+
+---
+
+# Verification — Step 4: Fresh Re-Verification
+
+```yaml
+- name: Run fresh Verus verification
+  uses: beneficial-ai-foundation/probe-verus/action@v1
+  with:
+    project-path: target/${{ inputs.project_path }}
+```
+
+```yaml
+- name: Compare verification results
+  run: |
+    if [ "$CERTIFIED_VERIFIED" = "$FRESH_VERIFIED" ] &&
+       [ "$CERTIFIED_TOTAL" = "$FRESH_TOTAL" ]; then
+      echo "Fresh verification matches certified results"
+    fi
+```
+
+**Note:** Exact hash may differ (non-deterministic timestamps/ordering),
+but the semantic result (verified/total counts) should match.
+
+---
+
+# Verification — Outcome Matrix
+
+| Stored Hash | On-Chain | Fresh Run | Verdict |
+|---|---|---|---|
+| Match | Found | Match | **Passed** — certification is authentic and reproducible |
+| Match | Found | Differ | **Partial** — authentic but Verus version may differ |
+| Mismatch | — | — | **Failed** — results may have been tampered with |
+| — | Not found | — | **Failed** — certification not on blockchain |
+
+---
+
+# The Reusable Action
+
+**`action/action.yml`** — lets any BAIF repository certify content in their own workflows:
+
+```yaml
+- uses: Beneficial-AI-Foundation/eth_certify/action@main
+  with:
+    source: ./output/results.json
+    description: "My project: 72/72 verified"
+    network: mainnet
+    rpc-url: ${{ secrets.MAINNET_RPC_URL }}
+    private-key: ${{ secrets.PRIVATE_KEY }}
+    certify-address: ${{ vars.CERTIFY_ADDRESS }}
+    safe-address: ${{ vars.SAFE_ADDRESS }}
+```
+
+**Outputs:** `tx-hash`, `content-hash`, `etherscan-url`
+
+---
