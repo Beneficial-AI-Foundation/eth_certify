@@ -143,6 +143,11 @@ jobs:
           VERUS_VERSION=$(echo "$CERT" | jq -r '.verus_version // empty')
           CERT_NETWORK=$(echo "$CERT" | jq -r '.network')
           
+          # Merkle sub-hashes (present in newer certifications)
+          RESULTS_HASH=$(echo "$CERT" | jq -r '.results_hash // empty')
+          SPECS_HASH=$(echo "$CERT" | jq -r '.specs_hash // empty')
+          SPECS_FILE=$(echo "$CERT" | jq -r '.specs_file // empty')
+          
           echo "found=true" >> $GITHUB_OUTPUT
           echo "content_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
           echo "tx_hash=$TX_HASH" >> $GITHUB_OUTPUT
@@ -151,6 +156,9 @@ jobs:
           echo "results_file=$RESULTS_FILE" >> $GITHUB_OUTPUT
           echo "verus_version=$VERUS_VERSION" >> $GITHUB_OUTPUT
           echo "cert_network=$CERT_NETWORK" >> $GITHUB_OUTPUT
+          echo "results_hash=$RESULTS_HASH" >> $GITHUB_OUTPUT
+          echo "specs_hash=$SPECS_HASH" >> $GITHUB_OUTPUT
+          echo "specs_file=$SPECS_FILE" >> $GITHUB_OUTPUT
           
           echo ""
           echo "═══════════════════════════════════════════════════════════════════"
@@ -162,6 +170,11 @@ jobs:
           echo "Network:        $CERT_NETWORK"
           echo "Verus Version:  $VERUS_VERSION"
           echo "Results File:   $RESULTS_FILE"
+          if [ -n "$RESULTS_HASH" ]; then
+            echo "Results Hash:   $RESULTS_HASH  (Merkle leaf)"
+            echo "Specs Hash:     $SPECS_HASH  (Merkle leaf)"
+            echo "Specs File:     $SPECS_FILE"
+          fi
 
       # ═══════════════════════════════════════════════════════════════
       # STEP 2: Verify stored results hash matches on-chain
@@ -201,6 +214,79 @@ jobs:
               echo "❌ Hash mismatch!"
               echo "stored_verified=false" >> $GITHUB_OUTPUT
             fi
+          fi
+
+      - name: Verify Merkle structure (specs + results)
+        id: verify-merkle
+        if: steps.lookup.outputs.results_hash != ''
+        working-directory: certify
+        run: |
+          CERT_ID="${{ steps.repo.outputs.cert_id }}"
+          RESULTS_HASH="${{ steps.lookup.outputs.results_hash }}"
+          SPECS_HASH="${{ steps.lookup.outputs.specs_hash }}"
+          EXPECTED_CONTENT_HASH="${{ steps.lookup.outputs.content_hash }}"
+          RESULTS_FILE="${{ steps.lookup.outputs.results_file }}"
+          SPECS_FILE="${{ steps.lookup.outputs.specs_file }}"
+          
+          echo "╔══════════════════════════════════════════════════════════════════╗"
+          echo "║              VERIFYING MERKLE STRUCTURE                          ║"
+          echo "╚══════════════════════════════════════════════════════════════════╝"
+          echo ""
+          
+          ALL_OK=true
+          
+          # 1. Verify results file hash matches recorded results_hash
+          FULL_RESULTS="certifications/${CERT_ID}/${RESULTS_FILE}"
+          if [ -n "$RESULTS_FILE" ] && [ -f "$FULL_RESULTS" ]; then
+            COMPUTED_RESULTS_HASH=$(cast keccak < "$FULL_RESULTS")
+            echo "Results file:     $FULL_RESULTS"
+            echo "Computed hash:    $COMPUTED_RESULTS_HASH"
+            echo "Recorded hash:    $RESULTS_HASH"
+            if [ "$COMPUTED_RESULTS_HASH" = "$RESULTS_HASH" ]; then
+              echo "✅ Results hash matches"
+            else
+              echo "❌ Results hash mismatch!"
+              ALL_OK=false
+            fi
+          fi
+          echo ""
+          
+          # 2. Verify specs file hash matches recorded specs_hash
+          FULL_SPECS="certifications/${CERT_ID}/${SPECS_FILE}"
+          if [ -n "$SPECS_FILE" ] && [ -f "$FULL_SPECS" ]; then
+            COMPUTED_SPECS_HASH=$(cast keccak < "$FULL_SPECS")
+            echo "Specs file:       $FULL_SPECS"
+            echo "Computed hash:    $COMPUTED_SPECS_HASH"
+            echo "Recorded hash:    $SPECS_HASH"
+            if [ "$COMPUTED_SPECS_HASH" = "$SPECS_HASH" ]; then
+              echo "✅ Specs hash matches"
+            else
+              echo "❌ Specs hash mismatch!"
+              ALL_OK=false
+            fi
+          fi
+          echo ""
+          
+          # 3. Verify Merkle root: keccak256(results_hash || specs_hash) == content_hash
+          # Concatenate the raw 32-byte hashes (strip 0x prefix) and hash
+          COMBINED="${RESULTS_HASH#0x}${SPECS_HASH#0x}"
+          COMPUTED_ROOT=$(echo -n "$COMBINED" | xxd -r -p | cast keccak)
+          echo "Merkle root check:"
+          echo "  keccak256($RESULTS_HASH || $SPECS_HASH)"
+          echo "  Computed:  $COMPUTED_ROOT"
+          echo "  Expected:  $EXPECTED_CONTENT_HASH"
+          if [ "$COMPUTED_ROOT" = "$EXPECTED_CONTENT_HASH" ]; then
+            echo "  ✅ Merkle root matches on-chain content hash"
+          else
+            echo "  ❌ Merkle root mismatch!"
+            ALL_OK=false
+          fi
+          echo ""
+          
+          if [ "$ALL_OK" = "true" ]; then
+            echo "merkle_verified=true" >> $GITHUB_OUTPUT
+          else
+            echo "merkle_verified=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Verify on-chain certification
@@ -357,6 +443,7 @@ jobs:
           
           STORED_VERIFIED="${{ steps.verify-stored-hash.outputs.stored_verified }}"
           ONCHAIN_VERIFIED="${{ steps.verify-onchain.outputs.onchain_verified }}"
+          MERKLE_VERIFIED="${{ steps.verify-merkle.outputs.merkle_verified }}"
           RESULTS_MATCH="${{ steps.compare.outputs.results_match }}"
           
           # Stored results check
@@ -366,6 +453,16 @@ jobs:
             echo "- ⏭️ **Stored Results**: Skipped (no results file)" >> $GITHUB_STEP_SUMMARY
           else
             echo "- ❌ **Stored Results**: Hash mismatch!" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Merkle structure check (only for newer certifications with specs)
+          if [ -n "$MERKLE_VERIFIED" ]; then
+            if [ "$MERKLE_VERIFIED" = "true" ]; then
+              echo "- ✅ **Merkle Structure**: results_hash + specs_hash → content_hash verified" >> $GITHUB_STEP_SUMMARY
+              echo "  - Specs hash: \`${{ steps.lookup.outputs.specs_hash }}\`" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ❌ **Merkle Structure**: Hash mismatch in Merkle tree!" >> $GITHUB_STEP_SUMMARY
+            fi
           fi
           
           # On-chain check

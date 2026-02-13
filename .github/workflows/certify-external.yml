@@ -90,7 +90,7 @@ jobs:
           echo "Commit SHA: $COMMIT_SHA"
 
       # ═══════════════════════════════════════════════════════════════
-      # STEP 1: Run Verus Verification
+      # STEP 1: Run Verus Verification + Spec Extraction
       # ═══════════════════════════════════════════════════════════════
       - name: Run Verus verification
         uses: beneficial-ai-foundation/probe-verus/action@v1
@@ -100,6 +100,41 @@ jobs:
           package: ${{ inputs.package }}
           output-dir: ./output
 
+      - name: Extract Verus specifications
+        id: specify
+        run: |
+          # Run probe-verus specify to extract the spec manifest.
+          # Requires atoms.json (produced by the verify action's atomize step).
+          # --with-spec-text includes the actual requires/ensures clause text.
+          SPECS_FILE="./output/specs.json"
+          ATOMS_FILE="${{ steps.verify.outputs.atoms-file }}"
+          PROJECT_SRC="target/${{ inputs.project_path }}"
+          
+          if [ -z "$ATOMS_FILE" ] || [ ! -f "$ATOMS_FILE" ]; then
+            echo "::warning::atoms.json not found — skipping spec extraction"
+            echo "specs_file=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "=== Running probe-verus specify ==="
+          echo "Source:     $PROJECT_SRC"
+          echo "Atoms:      $ATOMS_FILE"
+          echo "Output:     $SPECS_FILE"
+          
+          probe-verus specify "$PROJECT_SRC" \
+            -a "$ATOMS_FILE" \
+            -o "$SPECS_FILE" \
+            --with-spec-text
+          
+          if [ -f "$SPECS_FILE" ]; then
+            echo "specs_file=$(realpath "$SPECS_FILE")" >> $GITHUB_OUTPUT
+            SPEC_COUNT=$(jq 'length' "$SPECS_FILE")
+            echo "Specs extracted: $SPEC_COUNT functions"
+          else
+            echo "::warning::probe-verus specify did not produce specs.json"
+            echo "specs_file=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Verification summary
         run: |
           echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
@@ -108,6 +143,9 @@ jobs:
           echo "- **Ref**: ${{ inputs.ref }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: \`${{ steps.commit.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Verified**: ${{ steps.verify.outputs.verified-count }} / ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.specify.outputs.specs_file }}" ]; then
+            echo "- **Specs**: Extracted (Merkle certification)" >> $GITHUB_STEP_SUMMARY
+          fi
 
       # ═══════════════════════════════════════════════════════════════
       # STEP 2: Certify on Ethereum
@@ -116,10 +154,19 @@ jobs:
         working-directory: certify
         run: |
           # Create certify.conf
+          RESULTS_PATH="$(realpath ../output/results.json)"
+          SPECS_FILE="${{ steps.specify.outputs.specs_file }}"
+          
           cat > certify.conf << EOF
-          CERTIFY_SOURCE="$(realpath ../output/results.json)"
+          CERTIFY_SOURCE="$RESULTS_PATH"
           CERTIFY_DESCRIPTION="BAIF Certification: ${{ steps.repo.outputs.repo_path }}@${{ inputs.ref }} - ${{ steps.verify.outputs.verified-count }}/${{ steps.verify.outputs.total-functions }} verified"
           EOF
+          
+          # Add specs source for Merkle certification if available
+          if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
+            SPECS_PATH="$(realpath "$SPECS_FILE")"
+            echo "CERTIFY_SPECS_SOURCE=\"$SPECS_PATH\"" >> certify.conf
+          fi
           
           cat certify.conf
 
@@ -168,8 +215,14 @@ jobs:
           TX_HASH=$(echo "$OUTPUT" | grep -Eo 'Tx Hash:[[:space:]]*(0x)?[a-fA-F0-9]{64}' | head -1 | sed -E 's/.*Tx Hash:[[:space:]]*(0x)?/0x/')
           CONTENT_HASH=$(echo "$OUTPUT" | grep -Eio 'Content Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
           
+          # Extract Merkle sub-hashes (present when specs source is configured)
+          RESULTS_HASH=$(echo "$OUTPUT" | grep -Eio 'Results Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
+          SPECS_HASH=$(echo "$OUTPUT" | grep -Eio 'Specs Hash:[[:space:]]*0x[0-9a-fA-F]+' | head -1 | sed -E 's/.*(0x[0-9a-fA-F]+)/\1/')
+          
           echo "tx_hash=$TX_HASH" >> $GITHUB_OUTPUT
           echo "content_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
+          echo "results_hash=$RESULTS_HASH" >> $GITHUB_OUTPUT
+          echo "specs_hash=$SPECS_HASH" >> $GITHUB_OUTPUT
           
           # Build Etherscan URL
           if [ "$NETWORK" = "mainnet" ]; then
@@ -214,6 +267,21 @@ jobs:
           fi
           if [ -n "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
             CMD="$CMD --results-file \"$RESULTS_FILE\""
+          fi
+          
+          # Add Merkle sub-hashes and specs file if available
+          RESULTS_HASH="${{ steps.certify.outputs.results_hash }}"
+          SPECS_HASH="${{ steps.certify.outputs.specs_hash }}"
+          SPECS_FILE="${{ steps.specify.outputs.specs_file }}"
+          
+          if [ -n "$RESULTS_HASH" ]; then
+            CMD="$CMD --results-hash \"$RESULTS_HASH\""
+          fi
+          if [ -n "$SPECS_HASH" ]; then
+            CMD="$CMD --specs-hash \"$SPECS_HASH\""
+          fi
+          if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
+            CMD="$CMD --specs-file \"$SPECS_FILE\""
           fi
           
           echo "Running: $CMD"

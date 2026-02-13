@@ -140,6 +140,9 @@ Allows BAIF to certify any external Verus project without requiring changes to t
 - `certifications/{project-id}/results/` - Stored verification results
   - `{timestamp}.json` - Timestamped results for each certification
   - `latest.json` - Most recent verification results
+- `certifications/{project-id}/specs/` - Stored specification manifests
+  - `{timestamp}.json` - Timestamped specs for each certification
+  - `latest.json` - Most recent specification manifest
 
 ---
 
@@ -219,7 +222,10 @@ Each certification is recorded in `history.json` with full traceability:
       "total": 70,
       "verus_version": "0.2026.01.10.531beb1",
       "rust_version": "1.92.0",
-      "results_file": "results/2026-01-27T09-49-01Z.json"
+      "results_file": "results/2026-01-27T09-49-01Z.json",
+      "results_hash": "0x...",
+      "specs_hash": "0x...",
+      "specs_file": "specs/2026-01-27T09-49-01Z.json"
     }
   ]
 }
@@ -230,23 +236,39 @@ Each certification is recorded in `history.json` with full traceability:
 - `ref`: Git ref (branch/tag/commit) that was certified
 - `network`: Ethereum network (`mainnet` or `sepolia`)
 - `tx_hash`: Transaction hash of the on-chain certification
-- `content_hash`: Keccak256 hash of the verification results
+- `content_hash`: Keccak256 hash certified on-chain (Merkle root when specs are present)
 - `etherscan_url`: Link to transaction on Etherscan
 - `verified`/`total`: Verification statistics
 - `verus_version`: Verus toolchain version used
 - `rust_version`: Rust compiler version used
 - `results_file`: Path to stored verification results
+- `results_hash`: keccak256 of results.json (Merkle leaf)
+- `specs_hash`: keccak256 of specs.json (Merkle leaf)
+- `specs_file`: Path to stored specification manifest
 
-### Results Storage
+**Merkle hashing:** When specs are available, the on-chain `content_hash` is a
+Merkle root: `keccak256(results_hash || specs_hash)`. Both leaf hashes are stored
+in `history.json` so each artifact can be verified independently. When specs are
+not available (older certifications), `content_hash` is simply `keccak256(results.json)`.
 
-Full verification results are stored for each certification:
-- `results/{timestamp}.json` - Immutable record per certification
-- `results/latest.json` - Always points to most recent results
+### Results & Specs Storage
+
+Full verification results and specification manifests are stored for each certification:
+- `results/{timestamp}.json` - Immutable verification results per certification
+- `results/latest.json` - Most recent verification results
+- `specs/{timestamp}.json` - Immutable specification manifest per certification
+- `specs/latest.json` - Most recent specification manifest
+
+The specification manifest (produced by `probe-verus specify`) contains the
+pre/postconditions for each verified function, making the "theorem statements"
+inspectable without reading source code.
 
 This enables:
 - Full reproducibility of verification
 - Historical comparison of results across versions
 - Audit trail of what was verified
+- Independent review of what properties were proven (via specs)
+- Tracking spec stability across re-certifications (same `specs_hash` = unchanged specs)
 
 ---
 
@@ -260,41 +282,46 @@ This enables:
                                         │
                                         ▼
 ╭───────────────────────────────────────────────────────────────────────────╮
-│  🔍 STEP 1: VERIFICATION                                                  │
+│  🔍 STEP 1: VERIFICATION + SPEC EXTRACTION                                │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │  probe-verus/action@v1                                              │  │
 │  │  ├── Install Verus toolchain                                        │  │
 │  │  ├── Run probe-verus atomize → atoms.json                           │  │
 │  │  └── Run probe-verus verify  → results.json                         │  │
+│  │                                                                     │  │
+│  │  probe-verus specify (post-action step)                             │  │
+│  │  └── Extract specs from source + atoms.json → specs.json            │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
-│  📤 Outputs: results.json, verified_count=72, total_functions=72         │
+│  📤 Outputs: results.json, specs.json, verified_count, total_functions   │
 ╰───────────────────────────────────────────────────────────────────────────╯
                                         │
                                         ▼
 ╭───────────────────────────────────────────────────────────────────────────╮
-│  ⛓️  STEP 2: ON-CHAIN CERTIFICATION                                       │
+│  ⛓️  STEP 2: ON-CHAIN CERTIFICATION (Merkle hashing)                      │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │  eth_certify/action@main                                             │  │
-│  │  ├── Compute keccak256(results.json)                                │  │
-│  │  ├── Submit to Certify.sol contract                                 │  │
+│  │  certify_cli certify                                                │  │
+│  │  ├── results_hash = keccak256(results.json)                         │  │
+│  │  ├── specs_hash   = keccak256(specs.json)                           │  │
+│  │  ├── content_hash = keccak256(results_hash || specs_hash)           │  │
+│  │  ├── Submit content_hash to Certify.sol contract                    │  │
 │  │  └── Via Gnosis Safe multisig (optional)                            │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
-│  📤 Outputs: tx_hash=0x..., content_hash=0x...                           │
+│  📤 Outputs: tx_hash, content_hash, results_hash, specs_hash             │
 ╰───────────────────────────────────────────────────────────────────────────╯
                                         │
-                          ┌─────────────┼─────────────┐
-                          ▼             ▼             ▼
-              ┌─────────────────┐ ┌─────────────┐ ┌─────────────────┐
-              │  📁 badge.svg   │ │ 📁 history  │ │  📁 results/    │
-              │  📁 badge.json  │ │    .json    │ │  └─ latest.json │
-              └─────────────────┘ └─────────────┘ └─────────────────┘
+                    ┌───────────┬───────┼───────┬───────────┐
+                    ▼           ▼       ▼       ▼           ▼
+          ┌──────────────┐ ┌────────┐ ┌────────┐ ┌──────────────┐
+          │ 📁 badge.svg │ │📁 hist │ │📁 res/ │ │  📁 specs/   │
+          │ 📁 badge.json│ │  .json │ │ latest │ │  latest.json │
+          └──────────────┘ └────────┘ └────────┘ └──────────────┘
                           │             │             │
                           └─────────────┼─────────────┘
                                         ▼
                     ╔═══════════════════════════════════════════╗
-                    ║              🏷️  README Badge              ║
+                    ║              🏷️  README Badge             ║
                     ║  ┌─────────────────────────────────────┐  ║
                     ║  │ BAIF Certified | 72/72 verified | ✓ │  ║
                     ║  └─────────────────────────────────────┘  ║
@@ -325,26 +352,30 @@ eth_certify/
 │   └── {project-id}/       # Per-project certification data
 │       ├── badge.json      # Shields.io compatible data
 │       ├── badge.svg       # Custom SVG badge
-│       ├── history.json    # Certification history
+│       ├── history.json    # Certification history (incl. Merkle hashes)
 │       ├── README.md       # Project-specific instructions
-│       └── results/        # Stored verification results
+│       ├── results/        # Stored verification results
+│       │   ├── {timestamp}.json
+│       │   └── latest.json
+│       └── specs/          # Stored specification manifests
 │           ├── {timestamp}.json
 │           └── latest.json
 ├── certify_cli/            # Python CLI for certification
 │   ├── __main__.py
-│   ├── config.py
-│   ├── deploy.py
-│   ├── foundry.py
-│   ├── registry.py         # Badge & history generation
+│   ├── config.py           # Supports CERTIFY_SPECS_SOURCE for Merkle hashing
+│   ├── deploy.py           # Merkle-style hashing when specs are present
+│   ├── foundry.py          # compute_merkle_content_hash()
+│   ├── registry.py         # Badge, history, results & specs archiving
 │   ├── safe.py
 │   └── verify.py
 ├── doc/
-│   ├── overview.md         # This file
+│   ├── overview.md                    # This file
 │   └── ...
 ├── src/
 │   └── Certify.sol         # Solidity contract
 └── .github/workflows/
-    ├── certify-external.yml           # Certify external projects
+    ├── certify-external.yml           # Certify external projects (with spec extraction)
+    ├── verify.yml                     # Verify certifications (with Merkle check)
     ├── ci.yml                         # Linting & tests
     └── verify-certify-badge.yml.example
 ```

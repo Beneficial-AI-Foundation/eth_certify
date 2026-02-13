@@ -206,6 +206,40 @@ def compute_content_hash(source: str, filename: Optional[str] = None) -> str:
     return cast_keccak(content)
 
 
+def compute_merkle_content_hash(
+    results_source: str,
+    specs_source: str,
+) -> tuple[str, str, str]:
+    """Compute a Merkle-style content hash from results and specs files.
+
+    The on-chain hash is the keccak256 of the concatenation of the two
+    individual hashes (each a 32-byte value).  This allows independent
+    verification of either artifact while only requiring a single
+    on-chain transaction.
+
+    Args:
+        results_source: Path/URL/artifact reference for results.json
+        specs_source: Path/URL/artifact reference for specs.json
+
+    Returns:
+        Tuple of (content_hash, results_hash, specs_hash) where:
+          results_hash = keccak256(results.json)
+          specs_hash   = keccak256(specs.json)
+          content_hash = keccak256(results_hash || specs_hash)  (Merkle root)
+    """
+    results_content = fetch_content(results_source)
+    specs_content = fetch_content(specs_source)
+
+    results_hash = cast_keccak(results_content)
+    specs_hash = cast_keccak(specs_content)
+
+    # Concatenate the raw 32-byte hashes and hash the pair
+    combined = bytes.fromhex(results_hash[2:]) + bytes.fromhex(specs_hash[2:])
+    content_hash = cast_keccak(combined)
+
+    return content_hash, results_hash, specs_hash
+
+
 def _is_url(source: str) -> bool:
     """Check if source is a URL or a file path."""
     return source.startswith(("http://", "https://"))

@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .config import CertifyConfig, EnvConfig, Network
-from .foundry import compute_content_hash, run_cast, run_forge
+from .foundry import (
+    compute_content_hash,
+    compute_merkle_content_hash,
+    run_cast,
+    run_forge,
+)
 
 
 @dataclass
@@ -64,6 +69,8 @@ class CertifyResult:
     content_hash: str
     contract_address: str
     message: str
+    results_hash: Optional[str] = None  # Set when Merkle hashing is used
+    specs_hash: Optional[str] = None  # Set when Merkle hashing is used
 
 
 def certify_content(
@@ -74,6 +81,14 @@ def certify_content(
     safe_execute: bool = False,
 ) -> CertifyResult:
     """Certify content (from URL or file) on-chain.
+
+    When specs_source is configured (via CERTIFY_SPECS_SOURCE or certify.conf),
+    uses Merkle-style hashing:
+      results_hash = keccak256(results.json)
+      specs_hash   = keccak256(specs.json)
+      content_hash = keccak256(results_hash || specs_hash)
+
+    Otherwise falls back to simple hashing of the source file.
 
     If safe_address is provided without safe_execute, generates transaction
     data for Safe UI.
@@ -88,14 +103,29 @@ def certify_content(
         )
 
     source = certify_config.source
-    print(f"Fetching content hash for {certify_config.source_type}: {source}...")
+    results_hash: Optional[str] = None
+    specs_hash: Optional[str] = None
 
-    content_hash = compute_content_hash(source)
-    print(f"Content hash: {content_hash}")
+    if certify_config.specs_source:
+        # Merkle-style: hash results and specs independently, combine
+        print("Computing Merkle content hash...")
+        print(f"  Results: {source}")
+        print(f"  Specs:   {certify_config.specs_source}")
+        content_hash, results_hash, specs_hash = compute_merkle_content_hash(
+            results_source=source,
+            specs_source=certify_config.specs_source,
+        )
+        print(f"  Results hash: {results_hash}")
+        print(f"  Specs hash:   {specs_hash}")
+        print(f"  Content hash: {content_hash}  (Merkle root)")
+    else:
+        print(f"Fetching content hash for {certify_config.source_type}: {source}...")
+        content_hash = compute_content_hash(source)
+        print(f"Content hash: {content_hash}")
 
     # If Safe address provided, use Safe-based certification
     if safe_address:
-        return _certify_via_safe(
+        result = _certify_via_safe(
             env=env,
             certify_config=certify_config,
             network=network,
@@ -103,6 +133,9 @@ def certify_content(
             content_hash=content_hash,
             execute=safe_execute,
         )
+        result.results_hash = results_hash
+        result.specs_hash = specs_hash
+        return result
 
     print("\nCertifying content...")
 
@@ -132,6 +165,12 @@ def certify_content(
         tx_hash = _extract_tx_hash_from_broadcast(network)
         tx_info = f"\n   Tx Hash: {tx_hash}" if tx_hash else ""
 
+        merkle_info = ""
+        if results_hash and specs_hash:
+            merkle_info = (
+                f"\n   Results Hash: {results_hash}\n   Specs Hash: {specs_hash}"
+            )
+
         return CertifyResult(
             success=True,
             url=source,
@@ -142,8 +181,11 @@ def certify_content(
                 f"   Source: {source}\n"
                 f"   Content Hash: {content_hash}\n"
                 f"   Contract: {env.certify_address}"
+                f"{merkle_info}"
                 f"{tx_info}"
             ),
+            results_hash=results_hash,
+            specs_hash=specs_hash,
         )
     return CertifyResult(
         success=False,

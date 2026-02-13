@@ -35,17 +35,17 @@ Record the proof on Ethereum — permanently, publicly, independently verifiable
 # What BAIF Certify Does
 
 ```
-  Source Code        Verification        On-Chain             Public
-  + Specs            Engine              Certification        Badge
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│  Rust Code  │──▶│   Verus     │──▶│  Ethereum   │──▶│  Badge      │
-│  + Verus    │   │   + Z3 SMT  │   │  Event Log  │   │  + History  │
-│  Annotations│   │   Solver    │   │             │   │  + JSON     │
-└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
-     Input            Proof              Record            Display
+  Source Code        Verification        Spec               On-Chain             Public
+  + Specs            Engine              Extraction         Certification        Badge
+┌─────────────┐   ┌─────────────┐   ┌────────────┐   ┌─────────────┐   ┌─────────────┐
+│  Rust Code  │──▶│   Verus     │──▶│  probe-    │──▶│  Ethereum   │──▶│  Badge      │
+│  + Verus    │   │   + Z3 SMT  │   │  verus     │   │  Event Log  │   │  + History  │
+│  Annotations│   │   Solver    │   │  specify   │   │  (Merkle)   │   │  + Specs    │
+└─────────────┘   └─────────────┘   └────────────┘   └─────────────┘   └─────────────┘
+     Input            Proof           Spec Manifest       Record            Display
 ```
 
-Three layers: **verify**, **certify**, **display**.
+Four layers: **verify**, **extract specs**, **certify (Merkle)**, **display**.
 
 ---
 
@@ -76,19 +76,28 @@ This is the artifact we certify on-chain.
 
 ---
 
-# Layer 2: On-Chain Certification
+# Layer 2: On-Chain Certification (Merkle Hashing)
 
-The `Certify.sol` smart contract records a **content hash** on Ethereum:
+The `Certify.sol` smart contract records a **content hash** on Ethereum.
+When specs are available, the hash is a Merkle root of results + specs:
+
+```
+  results.json ──▶ results_hash = keccak256(results.json)  ─┐
+                                                             ├──▶ content_hash = keccak256(results_hash || specs_hash)
+  specs.json   ──▶ specs_hash   = keccak256(specs.json)    ─┘           │
+                                                                         ▼
+                                                                   on-chain event
+```
 
 ```solidity
 function certifyWebsite(
     string calldata url,          // project identifier
-    bytes32 contentHash,          // keccak256(results.json)
+    bytes32 contentHash,          // Merkle root: keccak256(results_hash || specs_hash)
     string calldata description   // "pmemlog: 72/72 verified"
 ) external {
     emit WebsiteCertified(
         keccak256(bytes(url)),    // indexed for lookup
-        contentHash,              // the fingerprint
+        contentHash,              // Merkle root
         msg.sender,               // BAIF Safe address
         url, description,
         block.timestamp
@@ -97,26 +106,29 @@ function certifyWebsite(
 ```
 
 **Stateless** — emits events only, no storage, no admin, no upgrades.
+One transaction, one gas cost. Both leaf hashes stored in `history.json`.
 
 ---
 
 # Layer 2: What Gets Recorded
 
 ```
-  results.json  ──▶  keccak256(bytes)  ──▶  Ethereum Event
-                                             ┌─────────────────────┐
-                                             │ contentHash = 0x545…│
-                                             │ sender      = 0x8EA…│
-                                             │ block       = 24196…│
-                                             │ timestamp   = 1737… │
-                                             └─────────────────────┘
+  results.json ──▶ results_hash ─┐
+                                  ├──▶ content_hash ──▶  Ethereum Event
+  specs.json   ──▶ specs_hash   ─┘    (Merkle root)    ┌─────────────────────┐
+                                                        │ contentHash = 0x…   │
+                                                        │ sender      = 0x8EA…│
+                                                        │ block       = 24196…│
+                                                        │ timestamp   = 1737… │
+                                                        └─────────────────────┘
 ```
 
-**Anyone can verify:**
-1. Fetch `results.json` from our repo
-2. Compute `keccak256(file_contents)`
-3. Query Ethereum for events with that hash
-4. Hashes match → file is authentic, timestamp is when it was certified
+**Anyone can verify (Merkle path):**
+1. Fetch `results.json` and `specs.json` from our repo
+2. Compute `keccak256` of each → compare with `results_hash`, `specs_hash` in history.json
+3. Compute `keccak256(results_hash || specs_hash)` → compare with on-chain `contentHash`
+4. Match → both files are authentic, neither has been tampered with
+5. Read `specs.json` to judge: are these the properties that matter?
 
 ---
 
@@ -169,23 +181,24 @@ Two main workflows:
 **`certify-external.yml`** — triggered manually with a repo URL, ref, and network.
 
 ```
-┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
-│  Clone repo   │     │  probe-verus  │     │  certify_cli  │     │  update-      │
-│  at ref       │────▶│  verify       │────▶│  certify      │────▶│  registry     │
-│               │     │               │     │  --safe       │     │               │
-│  target/      │     │  results.json │     │  --execute    │     │  badge + hist │
-└───────────────┘     └───────────────┘     └───────────────┘     └───────────────┘
-                                                    │
-                                                    ▼
-                                             Ethereum Event
-                                             tx: 0x09f0ee…
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│ Clone repo   │  │ probe-verus  │  │ probe-verus  │  │ certify_cli  │  │ update-      │
+│ at ref       │─▶│ verify       │─▶│ specify      │─▶│ certify      │─▶│ registry     │
+│              │  │              │  │              │  │ (Merkle)     │  │              │
+│ target/      │  │ results.json │  │ specs.json   │  │ --safe       │  │ badge + hist │
+└──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+                                                              │
+                                                              ▼
+                                                       Ethereum Event
+                                                       tx: 0x09f0ee…
 ```
 
 | Step | What happens | Tool |
 |---|---|---|
 | **Verify** | Install Verus, run `probe-verus verify` → `results.json` | `probe-verus/action@v1` |
-| **Certify** | `keccak256(results.json)` → sign via Gnosis Safe → submit to Ethereum | `certify_cli certify` |
-| **Registry** | Generate badge, append to `history.json`, archive results | `certify_cli update-registry` |
+| **Specify** | Extract specs from source → `specs.json` | `probe-verus specify` |
+| **Certify** | Merkle hash (results + specs) → sign via Gnosis Safe → submit to Ethereum | `certify_cli certify` |
+| **Registry** | Generate badge, append to `history.json`, archive results + specs | `certify_cli update-registry` |
 | **Commit** | Push updated certification files to this repo | `git commit && push` |
 
 Single GitHub Actions job — no human intervention after dispatch.
@@ -197,18 +210,19 @@ Single GitHub Actions job — no human intervention after dispatch.
 **`verify.yml`** — triggered manually with a repo URL, commit SHA, and network.
 
 ```
-┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
-│  Lookup cert  │     │  Hash check   │     │  On-chain     │     │  Fresh Verus  │
-│  in registry  │────▶│  stored file  │────▶│  event query  │────▶│  re-run       │
-│               │     │  vs on-chain  │     │               │     │  & compare    │
-│  history.json │     │  keccak256    │     │  eth_getLogs  │     │  probe-verus  │
-└───────────────┘     └───────────────┘     └───────────────┘     └───────────────┘
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│ Lookup cert  │  │ Hash check   │  │ Merkle       │  │ On-chain     │  │ Fresh Verus  │
+│ in registry  │─▶│ stored files │─▶│ structure    │─▶│ event query  │─▶│ re-run       │
+│              │  │ vs hashes    │  │ check        │  │              │  │ & compare    │
+│ history.json │  │ keccak256    │  │ root = hash  │  │ eth_getLogs  │  │ probe-verus  │
+└──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
 | Step | What it checks | Catches |
 |---|---|---|
 | **Registry lookup** | Find certification by commit SHA + network | Missing certifications |
-| **Hash verification** | `keccak256(stored results.json)` = on-chain `contentHash`? | Tampered results |
+| **Hash verification** | `keccak256(stored file)` = recorded hash? (for both results and specs) | Tampered artifacts |
+| **Merkle check** | `keccak256(results_hash \|\| specs_hash)` = on-chain `contentHash`? | Inconsistent Merkle tree |
 | **On-chain check** | Query Ethereum for the certification event | Fake/deleted certifications |
 | **Fresh re-verification** | Re-run Verus, compare verified/total counts | Non-reproducible results |
 
@@ -266,8 +280,9 @@ All contract source code is verified on Etherscan.
 
 **What a BAIF certification proves:**
 - Verus accepted the formal specs — machine-checked mathematical proof
-- The result is cryptographically bound to a content hash
+- The result is cryptographically bound to a Merkle root of results + specs
 - The hash is immutably recorded on Ethereum with a timestamp
+- The actual specs (pre/postconditions) are published and independently inspectable
 
 **What it does NOT prove:**
 - That the specs capture what users actually care about
@@ -275,8 +290,9 @@ All contract source code is verified on Etherscan.
 - That external dependencies are correct
 
 **The honest statement:**
-> We have built the **infrastructure** for certification.
-> We should find a more meaningful definition of what is certification.
+> We have built the **infrastructure** for certification and made the "theorem
+> statements" a first-class, inspectable artifact. The gap between attestation
+> and certification is narrowing — the specs are now visible for anyone to judge.
 
 ---
 
@@ -497,50 +513,59 @@ No trust in the original prover. No need to re-run the proof search.
 
 | Aspect | Rocq/Lean Proof Certificate | BAIF Certification |
 |--------|----------------------------|-------------------|
-| What is it? | The proof term itself | A hash of "Verus said OK" |
-| Verification | Run type-checker (~5K lines) | Re-run Verus + Z3 (millions of lines) |
+| What is it? | The proof term itself | Merkle hash of results + specs |
+| Statement visible? | Yes — theorem type | Yes — specs.json manifest |
+| Evidence checkable? | Yes — type-check ~5K lines | No — must re-run Verus + Z3 |
 | Trust assumption | Type system is sound | Z3 is correct, BAIF ran it honestly |
-| Portable? | Yes — term can be checked anywhere | No — need full Verus/Z3 toolchain |
+| Portable? | Yes — term can be checked anywhere | Partially — specs readable, re-verification needs toolchain |
 
 Verus/Z3 don't emit portable proof terms. Z3 returns `sat`/`unsat` —
-not a checkable certificate.
+not a checkable certificate. But the **theorem statements** (specs) are now
+explicit and inspectable, which is half the structure of a proof certificate.
 
-**Our "certificate" is an attestation:** "BAIF claims Verus accepted this code."
+**Our position:** closer to certification than pure attestation — the *statement*
+is independently inspectable, even if the *evidence* requires re-running the verifier.
 
 ---
 
-# Should We Rename to "Attestation"?
+# From Attestation Toward Certification
 
-The honest terminology:
+The terminology spectrum:
 
-| Term | What It Implies | Do We Provide It? |
-|------|-----------------|-------------------|
-| **Certificate** | Self-verifying proof object | No |
-| **Attestation** | Claim by a trusted party | Yes |
+| Term | What It Implies | Where We Are |
+|------|-----------------|--------------|
+| **Pure attestation** | "Trust us, it passed" | ~~No longer here~~ |
+| **Attestation + specs** | Claim by trusted party, with inspectable theorem statements | **Here now** |
+| **Certificate** | Self-verifying proof object | Not yet (needs proof terms from Z3) |
 
 **Current state:**
-> "BAIF attests that Verus accepted the specs in commit X at time T."
+> "BAIF attests that Verus accepted *these specific properties* (published in specs.json)
+> for commit X at time T. The specs are hashed into the on-chain Merkle root."
 
-To earn the word "certificate," we'd need either:
-- Proof terms from the verifier (Verus/Z3 don't provide this)
-- Or: include the **specs themselves** in the record, so reviewers can judge if they're meaningful
+Including specs in the record was the key step. What remains for full certification:
+- Proof terms from the verifier (Verus/Z3 don't provide this yet)
+- Spec quality metrics and review processes (see `doc/toward_certification.md`)
 
 ---
 
-# The Missing Piece: Specs in the Certificate
+# Specs Are Now in the Certificate
 
-Right now we record:
+We now record:
 - ✓ Commit hash (what code)
-- ✓ Content hash (what results)
+- ✓ Content hash — Merkle root of results + specs (what was proven)
 - ✓ Toolchain versions (how verified)
-- ✗ **The actual specifications** (what was proven)
+- ✓ **The specification manifest** (the "theorem statements")
 
-Without the specs, a verifier can only confirm:
-> "Verus accepted *something* — but what properties were actually proven?"
+The `specs.json` artifact (produced by `probe-verus specify`) contains:
+- Which functions have `requires`/`ensures` clauses
+- The actual text of pre/postconditions (with `--with-spec-text`)
+- Whether functions use `assume()`/`admit()` (trusted assumptions)
 
-**To make certification meaningful:**
-Include spec summaries or links to spec documentation in the certification record.
-Otherwise, "72/72 verified" is just "72 functions have *some* annotations that passed."
+A verifier can now confirm:
+> "These specific properties were proven — judge for yourself if they matter."
+
+**Remaining gap:** Automated assessment of spec quality (trivial spec detection,
+coverage metrics, taxonomy). See `doc/toward_certification.md` for the roadmap.
 
 ---
 

@@ -50,6 +50,13 @@ def main() -> int:
         action="store_true",
         help="When used with --safe, programmatically execute the transaction (requires owner private key)",
     )
+    certify_parser.add_argument(
+        "--specs-source",
+        type=str,
+        metavar="PATH",
+        help="Path to specs JSON (from probe-verus specify). Enables Merkle-style hashing: "
+        "content_hash = keccak256(results_hash || specs_hash)",
+    )
 
     # Verify command
     verify_parser = subparsers.add_parser(
@@ -178,6 +185,24 @@ def main() -> int:
         help="Path to verification results JSON to store",
     )
     registry_parser.add_argument(
+        "--results-hash",
+        type=str,
+        default=None,
+        help="keccak256 hash of results.json (Merkle leaf)",
+    )
+    registry_parser.add_argument(
+        "--specs-hash",
+        type=str,
+        default=None,
+        help="keccak256 hash of specs.json (Merkle leaf)",
+    )
+    registry_parser.add_argument(
+        "--specs-file",
+        type=str,
+        default=None,
+        help="Path to specification manifest JSON to store",
+    )
+    registry_parser.add_argument(
         "--base-dir",
         type=str,
         default="certifications",
@@ -226,6 +251,14 @@ def _handle_certify(args: argparse.Namespace) -> int:
     certify_config = CertifyConfig.load()
     network = _parse_network(args.network)
 
+    # CLI --specs-source overrides config file
+    if args.specs_source:
+        certify_config = CertifyConfig(
+            source=certify_config.source,
+            description=certify_config.description,
+            specs_source=args.specs_source,
+        )
+
     # Validate --execute requires --safe
     if args.execute and not args.safe:
         print("Error: --execute requires --safe ADDRESS")
@@ -239,6 +272,13 @@ def _handle_certify(args: argparse.Namespace) -> int:
         safe_execute=args.execute,
     )
     print(result.message)
+
+    # Output Merkle sub-hashes for downstream consumption (e.g., workflow steps)
+    if result.results_hash:
+        print(f"Results Hash: {result.results_hash}")
+    if result.specs_hash:
+        print(f"Specs Hash: {result.specs_hash}")
+
     return 0 if result.success else 1
 
 
@@ -322,6 +362,9 @@ def _handle_update_registry(args: argparse.Namespace) -> int:
         verus_version=args.verus_version,
         rust_version=args.rust_version,
         results_file=args.results_file,
+        results_hash=args.results_hash,
+        specs_hash=args.specs_hash,
+        specs_file=args.specs_file,
     )
     print(result.message)
     return 0 if result.success else 1

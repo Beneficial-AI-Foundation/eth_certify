@@ -139,6 +139,7 @@ class CertifyConfig:
 
     source: str  # URL, local file path, or GitHub artifact
     description: str
+    specs_source: Optional[str] = None  # Optional specs file for Merkle certification
 
     @classmethod
     def load(cls, config_path: Path = Path("certify.conf")) -> "CertifyConfig":
@@ -166,9 +167,13 @@ class CertifyConfig:
         )
         assert description is not None  # For type checker - default guarantees this
 
+        # Optional specs source for Merkle-style certification
+        specs_source = _get_env("CERTIFY_SPECS_SOURCE", file_vars)
+
         return cls(
             source=source,
             description=description,
+            specs_source=specs_source,
         )
 
     @property

@@ -24,6 +24,9 @@ class CertificationEntry:
     verus_version: Optional[str] = None
     rust_version: Optional[str] = None
     results_file: Optional[str] = None
+    results_hash: Optional[str] = None  # keccak256(results.json) — Merkle leaf
+    specs_hash: Optional[str] = None  # keccak256(specs.json) — Merkle leaf
+    specs_file: Optional[str] = None  # Archived specs file path
 
 
 @dataclass
@@ -49,6 +52,9 @@ def update_registry(
     verus_version: Optional[str] = None,
     rust_version: Optional[str] = None,
     results_file: Optional[str] = None,
+    results_hash: Optional[str] = None,
+    specs_hash: Optional[str] = None,
+    specs_file: Optional[str] = None,
 ) -> RegistryUpdateResult:
     """
     Update the certification registry with a new certification.
@@ -59,6 +65,7 @@ def update_registry(
     - history.json (certification history)
     - README.md (badge instructions)
     - results/<timestamp>.json (verification results, if provided)
+    - specs/<timestamp>.json (specification manifest, if provided)
 
     Args:
         cert_id: Unique certification ID (e.g., "owner-repo")
@@ -74,6 +81,9 @@ def update_registry(
         verus_version: Verus version used for verification
         rust_version: Rust toolchain version used
         results_file: Path to verification results JSON to store
+        results_hash: keccak256 of results.json (Merkle leaf)
+        specs_hash: keccak256 of specs.json (Merkle leaf)
+        specs_file: Path to specification manifest JSON to store
 
     Returns:
         RegistryUpdateResult with success status and message
@@ -110,6 +120,22 @@ def update_registry(
 
             stored_results_path = f"results/{timestamp_safe}.json"
 
+        # Store specs file if provided
+        stored_specs_path = None
+        if specs_file:
+            specs_dir = cert_dir / "specs"
+            specs_dir.mkdir(exist_ok=True)
+
+            # Copy to timestamped file
+            dest_file = specs_dir / f"{timestamp_safe}.json"
+            shutil.copy2(specs_file, dest_file)
+
+            # Also copy to latest.json
+            latest_file = specs_dir / "latest.json"
+            shutil.copy2(specs_file, latest_file)
+
+            stored_specs_path = f"specs/{timestamp_safe}.json"
+
         # 1. Create badge.json for shields.io
         _create_badge_json(cert_dir, verified, total, percent)
 
@@ -130,6 +156,9 @@ def update_registry(
             verus_version=verus_version,
             rust_version=rust_version,
             results_file=stored_results_path,
+            results_hash=results_hash,
+            specs_hash=specs_hash,
+            specs_file=stored_specs_path,
         )
         _update_history(cert_dir, entry)
 
@@ -272,6 +301,12 @@ def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
         new_entry["rust_version"] = entry.rust_version
     if entry.results_file:
         new_entry["results_file"] = entry.results_file
+    if entry.results_hash:
+        new_entry["results_hash"] = entry.results_hash
+    if entry.specs_hash:
+        new_entry["specs_hash"] = entry.specs_hash
+    if entry.specs_file:
+        new_entry["specs_file"] = entry.specs_file
 
     history["certifications"].insert(0, new_entry)
 

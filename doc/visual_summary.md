@@ -54,16 +54,18 @@ A system that mathematically verifies software correctness and creates immutable
           │                         │                         │
           ▼                         ▼                         ▼
   ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-  │  • Pre/post      │      │  • SMT solving   │      │  • keccak256     │
-  │    conditions    │      │  • Type checking │      │    content hash  │
-  │  • Invariants    │      │  • Proof search  │      │  • Timestamped   │
-  │  • Ghost code    │      │  • 72/72 verified│      │    event log     │
-  └──────────────────┘      └──────────────────┘      └──────────────────┘
+  │  • Pre/post      │      │  • SMT solving   │      │  • Merkle hash   │
+  │    conditions    │      │  • Type checking │      │    of results +  │
+  │  • Invariants    │      │  • Proof search  │      │    specs         │
+  │  • Ghost code    │      │  • 72/72 verified│      │  • Timestamped   │
+  └──────────────────┘      │  • Spec manifest │      │    event log     │
+                            └──────────────────┘      └──────────────────┘
                                                               │
                                                               ▼
                                                       ┌──────────────────┐
                                                       │  PUBLIC BADGE    │
                                                       │  + HISTORY       │
+                                                      │  + SPECS         │
                                                       │                  │
                                                       │  JSON endpoint   │
                                                       │  SVG artifact    │
@@ -125,17 +127,18 @@ fn binary_search(v: &Vec<i32>, key: i32) -> Option<usize>
 
 **Contract:** `Certify.sol` deployed on Ethereum
 
-We certify the verification results JSON by hashing it and recording that hash on-chain:
+We certify both the verification results and the specification manifest by hashing
+them into a Merkle root and recording that root on-chain:
 
 ```solidity
 function certifyWebsite(   // * name is historical; we're certifying JSON, not a website
     string calldata url,         // identifier (e.g., project URL or file reference)
-    bytes32 contentHash,         // keccak256(results.json) — the key artifact
+    bytes32 contentHash,         // Merkle root: keccak256(results_hash || specs_hash)
     string calldata description  // e.g., "pmemlog verification: 72/72"
 ) external {
     emit WebsiteCertified(
         keccak256(bytes(url)),   // Indexed for lookup
-        contentHash,             // The fingerprint of results.json
+        contentHash,             // Merkle root of results + specs
         msg.sender,              // BAIF Safe address
         url,
         description,
@@ -144,43 +147,51 @@ function certifyWebsite(   // * name is historical; we're certifying JSON, not a
 }
 ```
 
-**Concrete example — what gets certified:**
+**Concrete example — Merkle-style hashing:**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                 │
-│   INPUT: results.json from Verus                                                │
+│   INPUT 1: results.json (what Verus reported)                                   │
 │   ┌───────────────────────────────────────────────────────────────────────────┐ │
 │   │ {                                                                         │ │
-│   │   "PersistentMemoryLogHeader::spec_crc": {"verified": true, "time": 89},  │ │
-│   │   "PersistentMemoryLogHeader::check_crc": {"verified": true, "time": 142},│ │
-│   │   "UntrustedLogImpl::start": {"verified": true, "time": 203},             │ │
-│   │   ...                                                                     │ │
-│   │   "summary": {"verified": 72, "total": 72, "errors": 0}                   │ │
+│   │   "probe:pmemlog/.../spec_crc()": {"verified": true, "status": "success"},│ │
+│   │   "probe:pmemlog/.../check_crc()": {"verified": true, "status": "success"}│ │
 │   │ }                                                                         │ │
-│   └───────────────────────────────────────────────────────────────────────────┘ │
-│                              │                                                  │
-│                              ▼                                                  │
-│                      keccak256(json_bytes)                                      │
-│                              │                                                  │
-│                              ▼                                                  │
-│   OUTPUT: contentHash                                                           │
-│   0x545a9a795ee534ae61ecf4f72ad2202e823650931a0d1771d15f0b74c9103d06            │
-│                              │                                                  │
-│                              ▼                                                  │
+│   └───────────────────────────────────────────┬───────────────────────────────┘ │
+│                                               ▼                                 │
+│                                   results_hash = keccak256(results.json)        │
+│                                                                                 │
+│   INPUT 2: specs.json (what was proven — the "theorem statements")              │
+│   ┌───────────────────────────────────────────────────────────────────────────┐ │
+│   │ {                                                                         │ │
+│   │   "probe:pmemlog/.../check_crc()": {                                      │ │
+│   │     "has_requires": true, "has_ensures": true,                            │ │
+│   │     "requires_text": "self.bytes_valid()",                                │ │
+│   │     "ensures_text": "result == (self.crc == spec_crc(self))"              │ │
+│   │   }                                                                       │ │
+│   │ }                                                                         │ │
+│   └───────────────────────────────────────────┬───────────────────────────────┘ │
+│                                               ▼                                 │
+│                                   specs_hash = keccak256(specs.json)            │
+│                                                                                 │
+│   MERKLE ROOT:                                                                  │
+│   ┌───────────────────────────────────────────────────────────────────────────┐ │
+│   │  content_hash = keccak256(results_hash || specs_hash)                     │ │
+│   └───────────────────────────────────────────┬───────────────────────────────┘ │
+│                                               ▼                                 │
 │   ON-CHAIN: WebsiteCertified event                                              │
 │   ┌───────────────────────────────────────────────────────────────────────────┐ │
-│   │  topics[2] = 0x545a9a795ee534ae61ecf4f72ad2202e...  (the hash)            │ │
+│   │  topics[2] = content_hash (Merkle root)                                   │ │
 │   │  sender    = 0x8EAb4dB55DCEfb6D8bF76e1C6132d48D...  (BAIF Safe)           │ │
-│   │  block     = 24196278                                                     │ │
-│   │  timestamp = 1737970141 (2026-01-27T09:49:01Z)                            │ │
 │   └───────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                 │
 │   Anyone can:                                                                   │
-│   1. Fetch results.json from our repo                                           │
-│   2. Compute keccak256(file_contents)                                           │
-│   3. Query Ethereum for events with that hash                                   │
-│   4. Verify: hashes match → file is authentic, timestamp is when certified      │
+│   1. Fetch results.json and specs.json from our repo                            │
+│   2. Compute keccak256 of each file                                             │
+│   3. Verify each hash matches the recorded leaf hashes in history.json          │
+│   4. Verify keccak256(results_hash || specs_hash) == on-chain content_hash      │
+│   5. Read specs.json to judge: are these the properties that matter?            │
 │                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -278,26 +289,29 @@ cat certifications/project-id/results/latest.json | cast keccak
                                          │
                                          ▼
   ┌───────────────────────────────────────────────────────────────────────────────────┐
-  │ STEP 1: probe-verus/action@v1                                                     │
-  │ ─────────────────────────────                                                     │
+  │ STEP 1: probe-verus/action@v1 + spec extraction                                   │
+  │ ────────────────────────────────────────────────                                   │
   │ • Clone target repository                                                         │
   │ • Install Verus toolchain (version from Cargo.toml)                               │
   │ • Run: probe-verus atomize → atoms.json (function inventory)                      │
   │ • Run: probe-verus verify  → results.json (verification status)                   │
+  │ • Run: probe-verus specify → specs.json (specification manifest)                  │
   │                                                                                   │
-  │ Outputs: verified_count=72, total_functions=72, verus_version=0.2026.01.10        │
+  │ Outputs: results.json, specs.json, verified_count=72, total_functions=72          │
   └───────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼
   ┌───────────────────────────────────────────────────────────────────────────────────┐
-  │ STEP 2: eth_certify/action@main                                                   │
-  │ ───────────────────────────────                                                   │
-  │ • Compute: contentHash = keccak256(results.json)                                  │
+  │ STEP 2: certify_cli certify (Merkle hashing)                                      │
+  │ ──────────────────────────────────────────────                                    │
+  │ • Compute: results_hash = keccak256(results.json)                                 │
+  │ • Compute: specs_hash   = keccak256(specs.json)                                   │
+  │ • Compute: content_hash = keccak256(results_hash || specs_hash)                   │
   │ • Build Safe transaction (if using multisig)                                      │
   │ • Sign with PRIVATE_KEY from GitHub Secrets                                       │
-  │ • Submit to Ethereum (mainnet or Sepolia)                                         │
+  │ • Submit content_hash to Ethereum (mainnet or Sepolia)                            │
   │                                                                                   │
-  │ Outputs: tx_hash=0x..., content_hash=0x...                                        │
+  │ Outputs: tx_hash, content_hash, results_hash, specs_hash                          │
   └───────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼
@@ -306,8 +320,9 @@ cat certifications/project-id/results/latest.json | cast keccak
   │ ────────────────────────                                                          │
   │ • certifications/{project}/badge.json   → Shields.io endpoint                     │
   │ • certifications/{project}/badge.svg    → Static SVG asset                        │
-  │ • certifications/{project}/history.json → Append certification record             │
-  │ • certifications/{project}/results/{timestamp}.json → Archive                     │
+  │ • certifications/{project}/history.json → Append record (incl. Merkle hashes)     │
+  │ • certifications/{project}/results/{timestamp}.json → Archive results             │
+  │ • certifications/{project}/specs/{timestamp}.json   → Archive specs               │
   │                                                                                   │
   │ Commit and push to repository                                                     │
   └───────────────────────────────────────────────────────────────────────────────────┘
@@ -319,7 +334,7 @@ cat certifications/project-id/results/latest.json | cast keccak
 
 ## Certification Record Structure
 
-**`history.json`** — Full audit trail with toolchain provenance:
+**`history.json`** — Full audit trail with toolchain provenance and Merkle hashes:
 
 ```json
 {
@@ -327,16 +342,19 @@ cat certifications/project-id/results/latest.json | cast keccak
     {
       "timestamp": "2026-01-27T09:49:01Z",
       "ref": "main",
-      "commit": "a1b2c3d4e5f6...",
+      "commit_sha": "a1b2c3d4e5f6...",
       "network": "mainnet",
       "tx_hash": "0x09f0ee375bc3801b89f75e0663b1962d08d488e3...",
-      "content_hash": "0x545a9a795ee534ae61ecf4f72ad2202e823650931a...",
+      "content_hash": "0x... (Merkle root)",
       "etherscan_url": "https://etherscan.io/tx/0x09f0ee...",
       "verified": 72,
       "total": 72,
       "verus_version": "0.2026.01.10.531beb1",
       "rust_version": "1.92.0",
-      "results_file": "results/2026-01-27T09-49-01Z.json"
+      "results_file": "results/2026-01-27T09-49-01Z.json",
+      "results_hash": "0x... (keccak256 of results.json)",
+      "specs_hash": "0x... (keccak256 of specs.json)",
+      "specs_file": "specs/2026-01-27T09-49-01Z.json"
     }
   ]
 }
@@ -345,7 +363,12 @@ cat certifications/project-id/results/latest.json | cast keccak
 **Key properties:**
 - **Reproducibility:** Exact toolchain versions recorded
 - **Traceability:** Git ref and commit hash linked
-- **Verifiability:** Content hash can be recomputed from `results_file`
+- **Verifiability:** Merkle root can be recomputed from individual file hashes;
+  each file hash can be recomputed from the archived files
+- **Spec inspectability:** Anyone can read `specs.json` to judge whether the
+  proven properties are meaningful — without running Verus or reading source code
+- **Spec stability:** Unchanged specs produce the same `specs_hash` across
+  re-certifications, making spec evolution visible
 
 ---
 
@@ -480,8 +503,9 @@ cat certifications/project-id/results/latest.json | cast keccak
 │                                                                                     │
 │   ─────────────────────────────────────────────────────────────────────────────     │
 │                                                                                     │
-│   What we still need:                                                               │
-│   ✗ A meaningful definition of "certify"                                            │
+│   What we're building toward:                                                       │
+│   ◐ Making specs inspectable (spec manifests — implemented)                         │
+│   ✗ A fully meaningful definition of "certify"                                      │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -490,41 +514,43 @@ cat certifications/project-id/results/latest.json | cast keccak
 
 ---
 
-## Open Problem: What Does "Certify" Mean?
+## Moving From Attestation Toward Certification
 
 <div align="center">
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                     │
-│    ⚠️  CURRENT STATE: "Certify" = "Verus ran successfully"                          │
+│    CURRENT STATE: "Certify" = "Verus ran successfully" + "here are the specs"       │
 │                                                                                     │
-│    This is necessary but NOT sufficient for meaningful certification.               │
+│    We now include the specification manifest (the "theorem statements") as a        │
+│    first-class certified artifact, making the claim inspectable by anyone.          │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 </div>
 
-**The gap:**
-
- We've built the plumbing, the hard conceptual work of defining meaningful certification remains open.
+**The gap we're closing:**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                     │
 │   WHAT THE PROJECT             ???              WHAT VERUS                          │
 │   IS SUPPOSED TO DO      ─────────────▶         ACTUALLY CHECKS                     │
-│   (informal spec)           missing             (formal spec)                       │
-│                             bridge                                                  │
+│   (informal spec)           narrowing           (formal spec)                       │
+│                             the gap                                                 │
 │   "This library ensures                         requires(x > 0)                     │
 │    memory safety for                            ensures(result.is_ok())             │
 │    concurrent access"                           invariant(len <= cap)               │
 │                                                                                     │
 │   ─────────────────────────────────────────────────────────────────────────────     │
 │                                                                                     │
-│   Today, anyone can write formal specs that pass Verus but don't capture            │
-│   the actual intent. The certification proves "specs hold" not "specs matter."      │
+│   BEFORE: "72/72 verified" — no way to know what those specs actually say           │
+│   NOW:    specs.json included — reviewers can read and judge the specs              │
+│                                                                                     │
+│   The certification proves "these specific properties hold." Whether they are       │
+│   the right properties is now an auditable question, not a hidden one.              │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -534,24 +560,26 @@ cat certifications/project-id/results/latest.json | cast keccak
 | Level | What It Proves | Status |
 |-------|---------------|--------|
 | **L0: Mechanical** | Verus accepts the specs | ✓ We do this |
+| **L0.5: Inspectable** | Specs are published and hashed alongside results | ✓ Implemented (Merkle hashing) |
 | **L1: Refinement** | Formal specs correctly refine informal requirements | ✗ Open problem |
 | **L2: Completeness** | Specs cover all security-relevant properties | ✗ Open problem |
 | **L3: Review** | Independent expert validated the refinement | ✗ Open problem |
 
 **The honest statement:**
 
-> Right now, a BAIF certification proves that *someone wrote Verus specs and they passed*.
-> It does **not** prove those specs capture what users actually care about.
+> A BAIF certification now proves that *specific, inspectable properties were verified by Verus*,
+> and those properties are cryptographically bound to the on-chain record.
 > 
-> We have built the **infrastructure** for certification. 
-> We have not yet solved the **epistemology** of what makes a certification meaningful.
+> It does **not** yet prove those specs capture what users actually care about — but the specs
+> are now visible for anyone to judge. This is the key step from attestation toward certification.
 
-**Directions we're exploring:**
+**Directions we're exploring (see `doc/toward_certification.md`):**
 
-- Specification templates for common security properties
-- Linking specs to natural-language documentation
-- Community review processes for spec adequacy
-- Formal refinement proofs from high-level to low-level specs
+- Spec quality metrics (trivial spec detection, postcondition density)
+- Spec taxonomy (classifying properties by type: safety, correctness, crash consistency)
+- Spec diff tracking between re-certifications
+- Informal-to-formal mapping documents (linking specs to design docs)
+- Two-signature certification (domain expert attests specs, BAIF attests verification)
 
 ---
 
@@ -561,6 +589,6 @@ cat certifications/project-id/results/latest.json | cast keccak
 
 **Transforming software assurance from reputation-based to evidence-based.**
 
-*(Once we figure out what "evidence" should mean.)*
+*(The specs are now part of the evidence. What remains: ensuring the specs are the right ones.)*
 
 </div>
