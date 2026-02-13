@@ -1,6 +1,23 @@
 {
   "certifications": [
     {
+      "timestamp": "2026-02-13T10:54:37Z",
+      "ref": "92d062588d5b38dd2590988e5968ea19e4842e02",
+      "network": "sepolia",
+      "tx_hash": "0x36b6c4c7fea761ca5601d2e7ffb9cc9ac93f769194d6a02059741bce9891cb63",
+      "content_hash": "0x01e3de0b320b8cf08e6e86824c37f38cde4c64a2106c0f8656a8491d8f2cca05",
+      "etherscan_url": "https://sepolia.etherscan.io/tx/0x36b6c4c7fea761ca5601d2e7ffb9cc9ac93f769194d6a02059741bce9891cb63",
+      "verified": 70,
+      "total": 70,
+      "commit_sha": "92d062588d5b38dd2590988e5968ea19e4842e02",
+      "verus_version": "0.2026.01.10.531beb1",
+      "rust_version": "1.92.0",
+      "results_file": "results/2026-02-13T10-54-37Z.json",
+      "results_hash": "0x7760fbe4afbb425b57222d3697853321f63531958bf9e91a8a5266fe646e2907",
+      "specs_hash": "0x3d6f2e683df14adb33ea89fb7dbcba22505037ce2d61ead2d720f5b04671695d",
+      "specs_file": "specs/2026-02-13T10-54-37Z.json"
+    },
+    {
       "timestamp": "2026-02-13T10:02:25Z",
       "ref": "92d062588d5b38dd2590988e5968ea19e4842e02",
       "network": "sepolia",
