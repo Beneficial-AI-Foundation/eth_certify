@@ -1,0 +1,1443 @@
+{
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_seq_addition()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 176,
+      "lines-end": 187
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": false,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "ensures_text": "ensures\n            ({\n                let i = bytes1.len() as int;\n                let j = bytes2.len() as int;\n                &&& (bytes1 + bytes2).subrange(0, i) =~= bytes1\n                &&& (bytes1 + bytes2).subrange(i, i + j) =~= bytes2\n            })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/spec_bytes_to_metadata()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 317,
+      "lines-end": 329
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/main_t/TrustedPermission#CheckPermission<Seq<u8>>#check_permission()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 45,
+      "lines-end": 47
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_crc_correct()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1036,
+      "lines-end": 1051
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            header_bytes.len() == header_size,\n            crc_bytes.len() == 8,\n            metadata_bytes.len() == header_size - 8,\n            crc_bytes =~= spec_crc_bytes(metadata_bytes),\n            header_bytes =~= crc_bytes + metadata_bytes",
+    "ensures_text": "ensures\n            header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) =~= crc_bytes,\n            header_bytes.subrange(header_head_offset as int, header_size as int) =~= metadata_bytes,\n            header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) =~=\n                spec_crc_bytes(header_bytes.subrange(header_head_offset as int, header_size as int))"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_ib_update()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 781,
+      "lines-end": 869
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            pm.len() > contents_offset,\n            UntrustedLogImpl::recover(pm) is Some,\n            new_ib == cdb0_val || new_ib == cdb1_val,\n            new_ib == cdb0_val ==>\n                pm.subrange(header1_pos as int, header1_pos + header_size) == new_header_bytes,\n            new_ib == cdb1_val ==>\n                pm.subrange(header2_pos as int, header2_pos + header_size) == new_header_bytes,\n            new_header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) ==\n                spec_crc_bytes(new_header_bytes.subrange(header_head_offset as int, header_size as int)),\n            ({\n                let new_header = spec_bytes_to_header(new_header_bytes);\n                let live_header = spec_get_live_header(pm);\n                &&& new_header.metadata.tail == live_header.metadata.tail + bytes_to_append.len()\n                &&& new_header.metadata.head == live_header.metadata.head\n                &&& new_header.metadata.log_size == live_header.metadata.log_size\n                &&& new_header.metadata.tail - new_header.metadata.head < new_header.metadata.log_size\n            }),\n            perm.check_permission(pm),\n            permissions_depend_only_on_recovery_view(perm),\n            ({\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                let contents_end = (live_header.metadata.log_size + contents_offset) as int;\n                let append_size = bytes_to_append.len();\n                let len1 = (contents_end - physical_tail);\n                let len2 = bytes_to_append.len() - len1;\n\n                &&& physical_tail + append_size >= contents_end ==> {\n                    &&& pm.subrange(physical_tail, contents_end) =~= bytes_to_append.subrange(0, len1)\n                    &&& pm.subrange(contents_offset as int, contents_offset + len2) =~= bytes_to_append.subrange(len1 as int, append_size as int)\n                    &&& bytes_to_append =~= pm.subrange(physical_tail, contents_end) + pm.subrange(contents_offset as int, contents_offset + len2)\n                }\n                &&& physical_head <= physical_tail && physical_tail + append_size < contents_end ==> {\n                    pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n                &&& physical_tail < physical_head ==> {\n                    &&& physical_tail + append_size < physical_head\n                    &&& pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n            }),\n            ({\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                forall |pm_state| #[trigger] perm.check_permission(pm_state) <==> {\n                    let log_state = UntrustedLogImpl::recover(pm_state);\n                    log_state == old_log_state || log_state == Some(old_log_state.unwrap().append(bytes_to_append))\n                }\n            }),",
+    "ensures_text": "ensures\n            ({\n                let ib_bytes = spec_u64_to_le_bytes(new_ib);\n                let new_pm = update_contents_to_reflect_write(pm, incorruptible_bool_pos as int, ib_bytes);\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                let new_log_state = UntrustedLogImpl::recover(new_pm);\n                let new_live_header = spec_get_live_header(new_pm);\n                let (new_pm_ib, _, _) = pm_to_views(new_pm);\n                &&& match (old_log_state, new_log_state) {\n                        (Some(old_log_state), Some(new_log_state)) => {\n                            &&& new_log_state =~= old_log_state.append(bytes_to_append)\n                            &&& perm.check_permission(new_pm)\n                        }\n                        _ => false,\n                    }\n                &&& new_live_header == spec_bytes_to_header(new_header_bytes)\n                &&& new_ib == new_pm_ib\n            }),\n            forall |chunks_flushed| {\n                let new_pm = #[trigger] update_contents_to_reflect_partially_flushed_write(\n                    pm, incorruptible_bool_pos as int, spec_u64_to_le_bytes(new_ib), chunks_flushed);\n                &&& perm.check_permission(new_pm)\n            },"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/update_data_view_postcond()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 433,
+      "lines-end": 456
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/main_t/TrustedPermission<spec_fn(AbstractInfiniteLogState>#new()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 51,
+      "lines-end": 58
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": false,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "ensures_text": "ensures\n                forall |s| #[trigger] perm.check_permission(s) <==>\n                    crate::sccf::is_state_allowable(cur, s, recovery_view(), next)"
+  },
+  "probe:pmemlog/0.1.0/main_t/InfiniteLogImpl<u64>#setup()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 97,
+      "lines-end": 117
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                old(pm).inv(),\n                old(pm)@.len() == device_size",
+    "ensures_text": "ensures\n                pm.inv(),\n                pm.constants() == old(pm).constants(),\n                pm@.len() == device_size,\n                match result {\n                    Ok(log_capacity) =>\n                        recovery_view()(pm@) == Some(AbstractInfiniteLogState::initialize(log_capacity as int)),\n                    Err(InfiniteLogErr::InsufficientSpaceForSetup{ required_space }) => device_size < required_space,\n                    _ => false\n                }"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_u64_bytes_eq()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1075,
+      "lines-end": 1080
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            val1 == val2",
+    "ensures_text": "ensures\n            spec_u64_to_le_bytes(val1) =~= spec_u64_to_le_bytes(val2)"
+  },
+  "probe:pmemlog/0.1.0/sccf/is_state_allowable()": {
+    "code-path": "src/sccf.rs",
+    "spec-text": {
+      "lines-start": 9,
+      "lines-end": 24
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemmock_t/VolatileMemoryMockingPersistentMemory#PersistentMemory<PersistentMemoryConstants>#constants()": {
+    "code-path": "src/pmemmock_t.rs",
+    "spec-text": {
+      "lines-start": 36,
+      "lines-end": 39
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_same_order_alt()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 71,
+      "lines-end": 97
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x <= y,\n            y - x < d,\n            x % d <= y % d",
+    "ensures_text": "ensures\n            y / d == x / d"
+  },
+  "probe:pmemlog/0.1.0/main_t/InfiniteLogImpl<PM>#InfiniteLogImpl<Option<AbstractInfiniteLogState>>#view()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 82,
+      "lines-end": 85
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/maybe_corrupted()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 31,
+      "lines-end": 34
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_same_permissions()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 89,
+      "lines-end": 96
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            recovery_view()(pm1) =~= recovery_view()(pm2),\n            perm.check_permission(pm1),\n            permissions_depend_only_on_recovery_view(perm)",
+    "ensures_text": "ensures\n            perm.check_permission(pm2)"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_subsubrange_equality_forall()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 984,
+      "lines-end": 1005
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": false,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "ensures_text": "ensures\n            forall |s1: Seq<T>, s2: Seq<T>, i: int, j: int, k: int, m: int|\n                {\n                    &&& 0 <= i <= j <= s1.len()\n                    &&& j <= s2.len()\n                    &&& s1.subrange(i, j) == s2.subrange(i, j)\n                    &&& i <= k <= m <= j\n                }\n                ==> s1.subrange(k, m) == s2.subrange(k, m)"
+  },
+  "probe:pmemlog/0.1.0/main_t/&InfiniteLogImpl<PM>#InfiniteLogImpl<Result<(u64,/u64,/u64),/InfiniteLogErr>>#get_head_and_tail()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 272,
+      "lines-end": 295
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                self.valid()",
+    "ensures_text": "ensures\n                match result {\n                    Ok((result_head, result_tail, result_capacity)) => {\n                        let inf_log = self@.unwrap();\n                        &&& result_head == inf_log.head\n                        &&& result_tail == inf_log.head + inf_log.log.len()\n                        &&& result_capacity == inf_log.capacity\n                    },\n                    Err(_) => false\n                }"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_difference_equal()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 243,
+      "lines-end": 261
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x <= y,\n            x % d <= y % d,\n            y - x < d",
+    "ensures_text": "ensures\n            y % d - x % d == y - x"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/&WriteRestrictedPersistentMemory<Perm,/PM>#WriteRestrictedPersistentMemory<PM>#get_pm_ref()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 267,
+      "lines-end": 276
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                self.inv()",
+    "ensures_text": "ensures\n                pm.inv(),\n                pm@ == self@,\n                pm.constants() == self.constants()"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_wrapped_len()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 263,
+      "lines-end": 281
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x <= y,\n            x % d > y % d,\n            y - x < d",
+    "ensures_text": "ensures\n            d - (x % d) + (y % d) == y - x"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_subtract()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 332,
+      "lines-end": 351
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            (x % d) + y >= d,\n            0 <= y < d",
+    "ensures_text": "ensures\n            (x % d) + y - d == (x + y) % d"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/header_to_bytes()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 227,
+      "lines-end": 247
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": false,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "ensures_text": "ensures\n            header == spec_bytes_to_header(out@),\n            spec_u64_from_le_bytes(out@.subrange(header_crc_offset as int, header_crc_offset + 8)) == header.crc,\n            spec_bytes_to_metadata(out@.subrange(header_head_offset as int, header_size as int)) == header.metadata,\n            out@.len() == header_size"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#inv()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1276,
+      "lines-end": 1283
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_correct()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1053,
+      "lines-end": 1073
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            pm.len() > contents_offset,\n            header_bytes.len() == header_size,\n            header_pos == header1_pos || header_pos == header2_pos,\n            header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) =~=\n                spec_crc_bytes(header_bytes.subrange(header_head_offset as int, header_size as int)),\n            pm.subrange(header_pos, header_pos + header_size) =~= header_bytes",
+    "ensures_text": "ensures\n            pm.subrange(header_pos + header_crc_offset, header_pos + header_crc_offset + 8) =~=\n                header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8),\n            pm.subrange(header_pos + header_head_offset, header_pos + header_size) =~=\n                header_bytes.subrange(header_head_offset as int, header_size as int),\n            pm.subrange(header_pos + header_crc_offset, header_pos + header_crc_offset + 8) =~=\n                spec_crc_bytes(pm.subrange(header_pos + header_head_offset, header_pos + header_size))"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/WriteRestrictedPersistentMemory<Perm,/PM>#WriteRestrictedPersistentMemory<bool>#inv()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 248,
+      "lines-end": 250
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_not_equal()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 303,
+      "lines-end": 322
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires \n            d > 0,\n            y - x < d,\n            y - x >= 0,\n            x != y,",
+    "ensures_text": "ensures \n            x % d != y % d"
+  },
+  "probe:pmemlog/0.1.0/main_t/recovery_view()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 15,
+      "lines-end": 18
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_get_head_and_tail()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 2063,
+      "lines-end": 2089
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                self.inv(wrpm),\n                Self::recover(wrpm@) is Some",
+    "ensures_text": "ensures\n                match result {\n                    Ok((result_head, result_tail, result_capacity)) =>\n                        match Self::recover(wrpm@).unwrap() {\n                            AbstractInfiniteLogState{ head: head, log: log, capacity: capacity } => {\n                                &&& result_head == head\n                                &&& result_tail == head + log.len()\n                                &&& result_capacity == capacity\n                            }\n                        },\n                    Err(_) => false,\n                }"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/&mut/WriteRestrictedPersistentMemory<Perm,/PM>#WriteRestrictedPersistentMemory<u64>#write()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 278,
+      "lines-end": 301
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                old(self).inv(),\n                addr + bytes@.len() <= old(self)@.len(),\n                addr + bytes@.len() <= u64::MAX,\n                forall |chunks_flushed| {\n                    let new_contents: Seq<u8> =\n                        #[trigger] update_contents_to_reflect_partially_flushed_write(\n                            old(self)@, addr as int, bytes@, chunks_flushed\n                        );\n                    perm@.check_permission(new_contents)\n                },",
+    "ensures_text": "ensures\n                self.inv(),\n                self.constants() == old(self).constants(),\n                self@ == update_contents_to_reflect_write(old(self)@, addr as int, bytes@),"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_addition_when_bounded()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 230,
+      "lines-end": 241
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            y >= 0,\n            (x % d) + y < d,",
+    "ensures_text": "ensures\n            (x + y) % d == (x % d) + y"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#append_no_wrap()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1698,
+      "lines-end": 1753
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                permissions_depend_only_on_recovery_view(perm),\n                perm.check_permission(old(wrpm)@),\n                old(self).inv(&*old(wrpm)),\n                Self::recover(old(wrpm)@) is Some,\n                old_header == spec_get_live_header(old(wrpm)@).metadata,\n                // TODO: clean up\n                ({\n                    let physical_tail = spec_addr_logical_to_physical(old_header.tail as int, old_header.log_size as int);\n                    physical_tail + bytes_to_append@.len() < old_header.log_size + contents_offset\n                }),\n                ({\n                    let physical_head = spec_addr_logical_to_physical(old_header.head as int, old_header.log_size as int);\n                    let physical_tail = spec_addr_logical_to_physical(old_header.tail as int, old_header.log_size as int);\n                    let contents_end = old_header.log_size + contents_offset;\n                    &&& physical_head <= physical_tail ==> physical_tail + bytes_to_append@.len() < contents_end\n                    &&& physical_tail < physical_head ==> physical_tail <= physical_tail + bytes_to_append@.len() < physical_head\n                })",
+    "ensures_text": "ensures\n                self.inv(wrpm),\n                wrpm.constants() == old(wrpm).constants(),\n                Self::recover(wrpm@) is Some,\n                match (Self::recover(old(wrpm)@), Self::recover(wrpm@)) {\n                    (Some(old_log_state), Some(new_log_state)) => old_log_state =~= new_log_state,\n                    _ => false\n                },\n                ({\n                    let (old_ib, old_headers, old_data) = pm_to_views(old(wrpm)@);\n                    let (new_ib, new_headers, new_data) = pm_to_views(wrpm@);\n                    let physical_tail = spec_addr_logical_to_physical(old_header.tail as int, old_header.log_size as int);\n                    &&& old_ib == new_ib\n                    &&& old_headers == new_headers\n                    &&& new_data.subrange(physical_tail - contents_offset, physical_tail - contents_offset + bytes_to_append@.len() as int) =~= bytes_to_append@\n                    &&& new_data.subrange(0, physical_tail - contents_offset) =~= old_data.subrange(0, physical_tail - contents_offset)\n                    &&& new_data.subrange(physical_tail - contents_offset + bytes_to_append@.len(), new_data.len() as int) =~=\n                            old_data.subrange(physical_tail - contents_offset + bytes_to_append@.len(), old_data.len() as int)\n                })"
+  },
+  "probe:pmemlog/0.1.0/pmemmock_t/VolatileMemoryMockingPersistentMemory#PersistentMemory<Seq<u8>>#view()": {
+    "code-path": "src/pmemmock_t.rs",
+    "spec-text": {
+      "lines-start": 26,
+      "lines-end": 29
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/infinitelog_t/AbstractInfiniteLogState<int>#initialize()": {
+    "code-path": "src/infinitelog_t.rs",
+    "spec-text": {
+      "lines-start": 21,
+      "lines-end": 23
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/bytes_crc()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 40,
+      "lines-end": 54
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": false,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "ensures_text": "ensures\n            spec_crc_bytes(header_bytes@) == out@,\n            out@.len() == crc_size"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/all_elements_unique()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 25,
+      "lines-end": 27
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_same_log_state()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 894,
+      "lines-end": 953
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            UntrustedLogImpl::recover(old_pm) is Some,\n            UntrustedLogImpl::recover(new_pm) is Some,\n            live_data_view_eq(old_pm, new_pm),\n            ({\n                let (old_ib, old_headers, old_data) = pm_to_views(old_pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == cdb0_val || old_ib == cdb1_val\n                &&& old_ib == new_ib\n                &&& old_ib == cdb0_val ==> {\n                    &&& old_headers.header1 == new_headers.header1\n                }\n                &&& old_ib == cdb1_val ==> {\n                    &&& old_headers.header2 == new_headers.header2\n                }\n            })",
+    "ensures_text": "ensures\n            UntrustedLogImpl::recover(old_pm) =~=\n                UntrustedLogImpl::recover(new_pm)"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/spec_bytes_to_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 367,
+      "lines-end": 377
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<Seq<u8>>#recover()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1212,
+      "lines-end": 1243
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/main_t/InfiniteLogImpl<PM>#InfiniteLogImpl<bool>#valid()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 92,
+      "lines-end": 95
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/spec_get_live_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 74,
+      "lines-end": 82
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/main_t/&InfiniteLogImpl<PM>#InfiniteLogImpl<u64>#read()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 232,
+      "lines-end": 270
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                self.valid(),\n                pos + len <= u64::MAX",
+    "ensures_text": "ensures\n                ({\n                    let state = self@.unwrap();\n                    let head = state.head;\n                    let log = state.log;\n                    match result {\n                        Ok(bytes) => {\n                            let true_bytes = log.subrange(pos - head, pos + len - head);\n                            &&& pos >= head\n                            &&& pos + len <= head + log.len()\n                            &&& read_correct_modulo_corruption(bytes@, true_bytes,\n                                                             self.constants().impervious_to_corruption)\n                        },\n                        Err(InfiniteLogErr::CantReadBeforeHead{ head: head_pos }) => {\n                            &&& pos < head\n                            &&& head_pos == head\n                        },\n                        Err(InfiniteLogErr::CantReadPastTail{ tail }) => {\n                            &&& pos + len > head + log.len()\n                            &&& tail == head + log.len()\n                        },\n                        _ => false\n                    }\n                })"
+  },
+  "probe:pmemlog/0.1.0/infinitelog_t/AbstractInfiniteLogState#AbstractInfiniteLogState<int>#advance_head()": {
+    "code-path": "src/infinitelog_t.rs",
+    "spec-text": {
+      "lines-start": 29,
+      "lines-end": 38
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/update_byte_to_reflect_partially_flushed_write()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 187,
+      "lines-end": 203
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/WriteRestrictedPersistentMemory<Perm,/PM>#WriteRestrictedPersistentMemory<PersistentMemoryConstants>#constants()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 252,
+      "lines-end": 254
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_match()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 98,
+      "lines-end": 124
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            pm.len() > contents_offset,\n            header_pos == header1_pos || header_pos == header2_pos,\n            spec_bytes_to_header(pm.subrange(header_pos as int, header_pos + header_size)) == header,",
+    "ensures_text": "ensures\n            ({\n                let (_, headers, _) = pm_to_views(pm);\n                &&& header_pos == header1_pos ==>\n                        headers.header1 == header\n                &&& header_pos == header2_pos ==>\n                        headers.header2 == header\n            })"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_auto_basics()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 8,
+      "lines-end": 39
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            n > 0",
+    "ensures_text": "ensures\n            (x + n) % n == x % n,\n            (x - n) % n == x % n,\n            (x + n) / n == x / n + 1,\n            (x - n) / n == x / n - 1,\n            0 <= x < n <==> x % n == x,"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<Seq<u8>>#log_state_is_valid()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1184,
+      "lines-end": 1210
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_different_order()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 99,
+      "lines-end": 129
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x < y,\n            y - x <= d,\n            y % d <= x % d",
+    "ensures_text": "ensures\n            y / d == x / d + 1"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_index_equality()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 955,
+      "lines-end": 968
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            0 <= i <= j <= s1.len(),\n            j <= s2.len(),\n            s1.subrange(i, j) == s2.subrange(i, j)",
+    "ensures_text": "ensures\n            forall |k| i <= k < j ==> s1[k] == s2[k]"
+  },
+  "probe:pmemlog/0.1.0/pmemmock_t/VolatileMemoryMockingPersistentMemory#PersistentMemory<bool>#inv()": {
+    "code-path": "src/pmemmock_t.rs",
+    "spec-text": {
+      "lines-start": 31,
+      "lines-end": 34
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/update_contents_to_reflect_partially_flushed_write()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 205,
+      "lines-end": 221
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/spec_addr_logical_to_physical()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1154,
+      "lines-end": 1156
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_ib_update_effect_on_committed()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 632,
+      "lines-end": 779
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            pm.len() > contents_offset,\n            UntrustedLogImpl::recover(pm) is Some,\n            new_ib == cdb0_val || new_ib == cdb1_val,\n            new_ib == cdb0_val ==>\n                pm.subrange(header1_pos as int, header1_pos + header_size) == new_header_bytes,\n            new_ib == cdb1_val ==>\n                pm.subrange(header2_pos as int, header2_pos + header_size) == new_header_bytes,\n            new_header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) ==\n                spec_crc_bytes(new_header_bytes.subrange(header_head_offset as int, header_size as int)),\n            ({\n                let new_header = spec_bytes_to_header(new_header_bytes);\n                let live_header = spec_get_live_header(pm);\n                &&& new_header.metadata.tail == live_header.metadata.tail + bytes_to_append.len()\n                &&& new_header.metadata.head == live_header.metadata.head\n                &&& new_header.metadata.log_size == live_header.metadata.log_size\n                &&& new_header.metadata.tail - new_header.metadata.head < new_header.metadata.log_size\n            }),\n            perm.check_permission(pm),\n            permissions_depend_only_on_recovery_view(perm),\n            ({\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                let contents_end = (live_header.metadata.log_size + contents_offset) as int;\n                let append_size = bytes_to_append.len();\n                let len1 = (contents_end - physical_tail);\n                let len2 = bytes_to_append.len() - len1;\n\n                &&& physical_tail + append_size >= contents_end ==> {\n                    &&& pm.subrange(physical_tail, contents_end) =~= bytes_to_append.subrange(0, len1)\n                    &&& pm.subrange(contents_offset as int, contents_offset + len2) =~= bytes_to_append.subrange(len1 as int, append_size as int)\n                    &&& bytes_to_append =~= pm.subrange(physical_tail, contents_end) + pm.subrange(contents_offset as int, contents_offset + len2)\n                }\n                &&& physical_head <= physical_tail && physical_tail + append_size < contents_end ==> {\n                    pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n                &&& physical_tail < physical_head ==> {\n                    &&& physical_tail + append_size < physical_head\n                    &&& pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n            }),\n            ({\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                forall |pm_state| #[trigger] perm.check_permission(pm_state) <==> {\n                    let log_state = UntrustedLogImpl::recover(pm_state);\n                    log_state == old_log_state || log_state == Some(old_log_state.unwrap().append(bytes_to_append))\n                }\n            }),",
+    "ensures_text": "ensures\n            ({\n                let ib_bytes = spec_u64_to_le_bytes(new_ib);\n                let new_pm = update_contents_to_reflect_write(pm, incorruptible_bool_pos as int, ib_bytes);\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                let new_log_state = UntrustedLogImpl::recover(new_pm);\n                let new_live_header = spec_get_live_header(new_pm);\n                let (new_pm_ib, _, _) = pm_to_views(new_pm);\n                &&& match (old_log_state, new_log_state) {\n                        (Some(old_log_state), Some(new_log_state)) => {\n                            &&& new_log_state =~= old_log_state.append(bytes_to_append)\n                            &&& perm.check_permission(new_pm)\n                        }\n                        _ => false,\n                    }\n                &&& new_live_header == spec_bytes_to_header(new_header_bytes)\n                &&& new_ib == new_pm_ib\n            }),"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_pm_state_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1108,
+      "lines-end": 1152
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            ({\n                let header = spec_get_live_header(pm);\n                header.metadata.tail - header.metadata.head < header.metadata.log_size\n            })",
+    "ensures_text": "ensures\n            ({\n                let pm_state = UntrustedLogImpl::recover(pm);\n                let header = spec_get_live_header(pm);\n                match pm_state {\n                    Some(pm_state) => {\n                        &&& header.metadata.head == pm_state.head\n                        &&& pm_state.log.len() == header.metadata.tail - header.metadata.head\n                    }\n                    None => false\n                }\n            })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_single_write_crash()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1089,
+      "lines-end": 1106
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            bytes_to_write.len() == persistence_chunk_size,\n            write_addr % persistence_chunk_size == 0, // currently seems to succeed without nonlinear arith\n            0 <= write_addr < pm.len(),\n            write_addr + bytes_to_write.len() <= pm.len()",
+    "ensures_text": "ensures\n            ({\n                forall |chunks_flushed: Set<int>| {\n                    let new_crash_contents = #[trigger] update_contents_to_reflect_partially_flushed_write(\n                        pm, write_addr, bytes_to_write, chunks_flushed);\n                    let new_contents = update_contents_to_reflect_write(pm, write_addr, bytes_to_write);\n                    new_crash_contents =~= pm || new_crash_contents =~= new_contents\n                }\n            })"
+  },
+  "probe:pmemlog/0.1.0/infinitelog_t/AbstractInfiniteLogState#AbstractInfiniteLogState<Seq<u8>>#append()": {
+    "code-path": "src/infinitelog_t.rs",
+    "spec-text": {
+      "lines-start": 25,
+      "lines-end": 27
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_metadata_bytes_eq()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 331,
+      "lines-end": 365
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            bytes1.len() == header_size - 8,\n            bytes2.len() == header_size - 8,\n            metadata == spec_bytes_to_metadata(bytes1),\n            metadata == spec_bytes_to_metadata(bytes2),",
+    "ensures_text": "ensures\n            bytes1 =~= bytes2"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/update_byte_to_reflect_write()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 159,
+      "lines-end": 171
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_data_write_is_safe()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 379,
+      "lines-end": 431
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            pm.len() > contents_offset,\n            contents_offset <= write_addr < pm.len(),\n            perm.check_permission(pm),\n            permissions_depend_only_on_recovery_view(perm),\n            ({\n                // write must be a valid write and not overlap the live log\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                &&& physical_head <= physical_tail ==> {\n                    &&& write_addr + bytes.len() <= live_header.metadata.log_size + contents_offset\n                    &&& write_addr < physical_head ==> write_addr + bytes.len() <= physical_head\n                    &&& (physical_tail <= write_addr || write_addr < physical_head)\n                }\n                &&& physical_tail < physical_head ==> {\n                    &&& physical_tail <= write_addr <= write_addr + bytes.len() < physical_head\n                }\n            }),",
+    "ensures_text": "ensures\n            UntrustedLogImpl::recover(pm) is Some,\n            forall |chunks_flushed| {\n                let new_pm = #[trigger] update_contents_to_reflect_partially_flushed_write(\n                    pm, write_addr, bytes, chunks_flushed);\n                perm.check_permission(new_pm)\n            },\n            ({\n                let new_pm = update_contents_to_reflect_write(pm, write_addr, bytes);\n                perm.check_permission(new_pm)\n            }),\n            update_data_view_postcond(pm, bytes, write_addr),"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#update_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1317,
+      "lines-end": 1429
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                permissions_depend_only_on_recovery_view(perm),\n                contents_offset < old(wrpm)@.len(),\n                old(self).inv(&*old(wrpm)),\n                Self::recover(old(wrpm)@) is Some,\n                new_header_bytes@.subrange(header_crc_offset as int, header_crc_offset + 8) =~=\n                    spec_crc_bytes(new_header_bytes@.subrange(header_head_offset as int, header_size as int)),\n                new_header_bytes.len() == header_size,\n                match Self::recover(old(wrpm)@) {\n                    Some(log_state) => perm.check_permission(old(wrpm)@),\n                    None => false\n                }",
+    "ensures_text": "ensures\n                self.inv(wrpm),\n                Self::recover(wrpm@) is Some,\n                wrpm.constants() == old(wrpm).constants(),\n                match (Self::recover(old(wrpm)@), Self::recover(wrpm@)) {\n                    (Some(old_log_state), Some(new_log_state)) => old_log_state =~= new_log_state,\n                    _ => false\n                },\n                ({\n                    let (old_pm_ib, old_metadata, old_data) = pm_to_views(old(wrpm)@);\n                    let (new_pm_ib, new_metadata, new_data) = pm_to_views(wrpm@);\n                    let new_header = spec_bytes_to_header(new_header_bytes@);\n                    &&& old_pm_ib == new_pm_ib\n                    &&& old_pm_ib == cdb0_val ==> {\n                        &&& new_metadata.header1 == old_metadata.header1\n                        &&& new_metadata.header2 == new_header\n                        &&& wrpm@.subrange(header2_pos + header_crc_offset, header2_pos + header_crc_offset + 8) =~=\n                                spec_crc_bytes(wrpm@.subrange(header2_pos + header_head_offset, header2_pos + header_size))\n                        &&& wrpm@.subrange(header2_pos as int, header2_pos + header_size) =~= new_header_bytes@\n                    }\n                    &&& old_pm_ib == cdb1_val ==> {\n                        &&& new_metadata.header1 == new_header\n                        &&& new_metadata.header2 == old_metadata.header2\n                        &&& wrpm@.subrange(header1_pos + header_crc_offset, header1_pos + header_crc_offset + 8) =~=\n                                spec_crc_bytes(wrpm@.subrange(header1_pos + header_head_offset, header1_pos + header_size))\n                        &&& wrpm@.subrange(header1_pos as int, header1_pos + header_size) =~= new_header_bytes@\n                    }\n                    &&& old_data =~= new_data\n                }),"
+  },
+  "probe:pmemlog/0.1.0/main_t/&mut/InfiniteLogImpl<PM>#InfiniteLogImpl<&Vec<u8>>#append()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 149,
+      "lines-end": 188
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                old(self).valid()",
+    "ensures_text": "ensures\n                self.valid(),\n                self.constants() == old(self).constants(),\n                match result {\n                    Ok(offset) =>\n                        match (old(self)@, self@) {\n                            (Some(old_log), Some(new_log)) => {\n                                &&& offset as nat == old_log.log.len() + old_log.head\n                                &&& new_log == old_log.append(bytes_to_append@)\n                            },\n                            _ => false\n                        },\n                    Err(InfiniteLogErr::InsufficientSpaceForAppend{ available_space }) => {\n                        &&& self@ == old(self)@\n                        &&& available_space < bytes_to_append.len()\n                        &&& {\n                               let log = old(self)@.unwrap();\n                               ||| available_space == log.capacity - log.log.len()\n                               ||| available_space == u64::MAX - log.head - log.log.len()\n                           }\n                    },\n                    _ => false\n                }"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_same_order()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 41,
+      "lines-end": 69
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x < y,\n            y - x <= d,\n            x % d < y % d",
+    "ensures_text": "ensures\n            y / d == x / d"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/spec_crc_bytes()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 38,
+      "lines-end": 38
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/WriteRestrictedPersistentMemory<Perm,/PM>#WriteRestrictedPersistentMemory<Seq<u8>>#view()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 244,
+      "lines-end": 246
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_data_update_view_crash()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 498,
+      "lines-end": 535
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            pm.len() > contents_offset,\n            contents_offset <= write_addr < pm.len(),\n            ({\n                // write must be a valid write and not overlap the live log\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                &&& physical_head <= physical_tail ==> write_addr + new_bytes.len() <= live_header.metadata.log_size + contents_offset\n                &&& physical_tail < physical_head ==> write_addr + new_bytes.len() < physical_head\n            })",
+    "ensures_text": "ensures\n            UntrustedLogImpl::recover(pm) is Some,\n            ({\n                let new_pm = update_contents_to_reflect_partially_flushed_write(pm, write_addr, new_bytes, chunks_flushed);\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == new_ib\n                &&& old_headers == new_headers\n                &&& new_data.len() == old_data.len()\n                &&& new_data.subrange(0, write_addr - contents_offset) =~= old_data.subrange(0, write_addr - contents_offset)\n                &&& new_data.subrange(write_addr - contents_offset + new_bytes.len(), new_data.len() as int) =~=\n                        old_data.subrange(write_addr - contents_offset + new_bytes.len(), old_data.len() as int)\n                &&& UntrustedLogImpl::recover(new_pm) is Some\n            })"
+  },
+  "probe:pmemlog/0.1.0/main()": {
+    "code-path": "src/main.rs",
+    "spec-text": {
+      "lines-start": 20,
+      "lines-end": 40
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/axiom_bytes_uncorrupted()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 68,
+      "lines-end": 80
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            maybe_corrupted(x_c, x, x_addrs),\n            maybe_corrupted(y_c, y, y_addrs),\n            y == spec_crc_bytes(x),\n            y_c == spec_crc_bytes(x_c),\n            all_elements_unique(x_addrs),\n            all_elements_unique(y_addrs)",
+    "ensures_text": "ensures\n            x == x_c"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#append_wrap()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1755,
+      "lines-end": 1824
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                permissions_depend_only_on_recovery_view(perm),\n                perm.check_permission(old(wrpm)@),\n                old(self).inv(&*old(wrpm)),\n                Self::recover(old(wrpm)@) is Some,\n                old_header == spec_get_live_header(old(wrpm)@).metadata,\n                ({\n                    let physical_head = spec_addr_logical_to_physical(old_header.head as int, old_header.log_size as int);\n                    let physical_tail = spec_addr_logical_to_physical(old_header.tail as int, old_header.log_size as int);\n                    let contents_end = old_header.log_size + contents_offset;\n                    &&& contents_offset < physical_head\n                    &&& physical_tail + bytes_to_append@.len() >= contents_end\n                    &&& physical_head <= physical_tail\n                    &&& bytes_to_append@.len() <= old_header.log_size - (old_header.tail - old_header.head)\n                }),",
+    "ensures_text": "ensures\n                self.inv(wrpm),\n                Self::recover(wrpm@) is Some,\n                wrpm.constants() == old(wrpm).constants(),\n                match (Self::recover(old(wrpm)@), Self::recover(wrpm@)) {\n                    (Some(old_log_state), Some(new_log_state)) => old_log_state =~= new_log_state,\n                    _ => false\n                },\n                ({\n                    let (old_ib, old_headers, old_data) = pm_to_views(old(wrpm)@);\n                    let (new_ib, new_headers, new_data) = pm_to_views(wrpm@);\n                    let contents_end = old_header.log_size + contents_offset;\n                    let physical_tail = spec_addr_logical_to_physical(old_header.tail as int, old_header.log_size as int);\n                    let len1 = (contents_end - physical_tail);\n                    let len2 = bytes_to_append@.len() - len1;\n                    &&& old_ib == new_ib\n                    &&& old_headers == new_headers\n                    &&& new_data.subrange(physical_tail - contents_offset, contents_end - contents_offset) =~= bytes_to_append@.subrange(0, len1)\n                    &&& new_data.subrange(0, len2 as int) =~= bytes_to_append@.subrange(len1 as int, bytes_to_append@.len() as int)\n                    &&& new_data.subrange(len2 as int, physical_tail - contents_offset) =~= old_data.subrange(len2 as int, physical_tail - contents_offset)\n                    &&& bytes_to_append@ =~= new_data.subrange(physical_tail - contents_offset, contents_end - contents_offset) + new_data.subrange(0, len2 as int)\n                })"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_equal()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 283,
+      "lines-end": 293
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x <= y,\n            x % d == y % d,\n            y - x < d",
+    "ensures_text": "ensures\n            x == y"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/bytes_to_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 208,
+      "lines-end": 225
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            bytes@.len() == header_size",
+    "ensures_text": "ensures\n            out == spec_bytes_to_header(bytes@)"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/WriteRestrictedPersistentMemory<PM>#new()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 256,
+      "lines-end": 265
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                pm.inv()",
+    "ensures_text": "ensures\n                wrpm@ == pm@,\n                wrpm.inv(),\n                wrpm.constants() == pm.constants()"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_equal_converse()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 295,
+      "lines-end": 301
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires \n            d > 0,\n            x == y,",
+    "ensures_text": "ensures \n            x % d == y % d"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/permissions_depend_only_on_recovery_view()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 84,
+      "lines-end": 87
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<u64>#untrusted_setup()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1433,
+      "lines-end": 1492
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                old(pm).inv(),\n                old(pm)@.len() == device_size",
+    "ensures_text": "ensures\n                pm.inv(),\n                pm.constants() == old(pm).constants(),\n                pm@.len() == device_size,\n                match result {\n                    Ok(capacity) => Self::recover(pm@) ==\n                                Some(AbstractInfiniteLogState::initialize(capacity as int)),\n                    Err(InfiniteLogErr::InsufficientSpaceForSetup{ required_space }) => device_size < required_space,\n                    _ => false\n                }"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/axiom_corruption_detecting_boolean()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 96,
+      "lines-end": 105
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            maybe_corrupted(spec_u64_to_le_bytes(cdb_c), spec_u64_to_le_bytes(cdb), addrs),\n            all_elements_unique(addrs),\n            cdb == cdb0_val || cdb == cdb1_val,\n            cdb_c == cdb0_val || cdb_c == cdb1_val,",
+    "ensures_text": "ensures\n            cdb_c == cdb"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/maybe_corrupted_byte()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 29,
+      "lines-end": 29
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_data_update_view()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 458,
+      "lines-end": 496
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            pm.len() > contents_offset,\n            contents_offset <= write_addr < pm.len(),\n            ({\n                // write must be a valid write and not overlap the live log\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                &&& physical_head <= physical_tail ==> {\n                        &&& write_addr + new_bytes.len() <= live_header.metadata.log_size + contents_offset\n                        &&& write_addr < physical_head ==> write_addr + new_bytes.len() <= physical_head\n                        &&& (physical_tail <= write_addr || write_addr < physical_head)\n                }\n                &&& physical_tail < physical_head ==> {\n                        &&& physical_tail <= write_addr <= write_addr + new_bytes.len() < physical_head\n                }\n            }),",
+    "ensures_text": "ensures\n            UntrustedLogImpl::recover(pm) is Some,\n            update_data_view_postcond(pm, new_bytes, write_addr),"
+  },
+  "probe:pmemlog/0.1.0/main_t/InfiniteLogImpl<PM>#InfiniteLogImpl<PersistentMemoryConstants>#constants()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 87,
+      "lines-end": 90
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_eq()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1082,
+      "lines-end": 1087
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            bytes1 =~= bytes2",
+    "ensures_text": "ensures\n            forall |i: int, j: int| 0 <= i < j < bytes1.len() ==> bytes1.subrange(i, j) =~= bytes2.subrange(i, j)"
+  },
+  "probe:pmemlog/0.1.0/pmemmock_t/VolatileMemoryMockingPersistentMemory<u64>#new()": {
+    "code-path": "src/pmemmock_t.rs",
+    "spec-text": {
+      "lines-start": 13,
+      "lines-end": 22
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": false,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "ensures_text": "ensures\n                match result {\n                    Ok(pm) => pm@.len() == device_size && pm.inv(),\n                    Err(_) => true\n                }"
+  },
+  "probe:pmemlog/0.1.0/pmemspec_t/update_contents_to_reflect_write()": {
+    "code-path": "src/pmemspec_t.rs",
+    "spec-text": {
+      "lines-start": 173,
+      "lines-end": 185
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_split_into_bytes()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 149,
+      "lines-end": 174
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            crc_bytes.len() == 8,\n            metadata_bytes.len() == header_size - 8,\n            header_bytes.len() == header_size,\n            ({\n                let header = PersistentHeader { crc: spec_u64_from_le_bytes(crc_bytes), metadata: spec_bytes_to_metadata(metadata_bytes) };\n                spec_bytes_to_header(header_bytes) == header\n            }),",
+    "ensures_text": "ensures\n            crc_bytes + metadata_bytes =~= header_bytes"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_different_order_alt()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 131,
+      "lines-end": 161
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x <= y,\n            y - x < d,\n            y % d < x % d",
+    "ensures_text": "ensures\n            y / d == x / d + 1"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_inactive_header_update_view()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 537,
+      "lines-end": 582
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            header_pos == header1_pos || header_pos == header2_pos,\n            ({\n                // the new bytes must be written to the inactive header\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                &&& old_ib == cdb0_val ==> header_pos == header2_pos\n                &&& old_ib == cdb1_val ==> header_pos == header1_pos\n            }),\n            new_header_bytes.len() == header_size,\n            pm.len() > contents_offset,",
+    "ensures_text": "ensures\n            ({\n                let new_pm = update_contents_to_reflect_write(pm, header_pos, new_header_bytes);\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == new_ib\n                &&& old_data =~= old_data\n                &&& header_pos == header1_pos ==>\n                    old_headers.header2 == new_headers.header2\n                &&& header_pos == header2_pos ==>\n                    old_headers.header1 == new_headers.header1\n                &&& UntrustedLogImpl::recover(new_pm) is Some\n            })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_advance_head()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1826,
+      "lines-end": 1952
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                old(self).inv(&*old(wrpm)),\n                Self::recover(old(wrpm)@) is Some,\n                ({\n                    let old_log_state = Self::recover(old(wrpm)@);\n                    forall |pm_state| #[trigger] perm.check_permission(pm_state) <==> {\n                        let log_state = Self::recover(pm_state);\n                        ||| log_state == old_log_state\n                        ||| log_state == Some(old_log_state.unwrap().advance_head(new_head as int))\n                    }\n                })",
+    "ensures_text": "ensures\n                self.inv(wrpm),\n                wrpm.constants() == old(wrpm).constants(),\n                ({\n                    let old_log_state = Self::recover(old(wrpm)@);\n                    let new_log_state = Self::recover(wrpm@);\n                    match (result, old_log_state, new_log_state) {\n                        (Ok(_), Some(old_log_state), Some(new_log_state)) => {\n                            &&& old_log_state.head <= new_head <= old_log_state.head + old_log_state.log.len()\n                            &&& new_log_state == old_log_state.advance_head(new_head as int)\n                        },\n                        (Err(InfiniteLogErr::CantAdvanceHeadPositionBeforeHead{ head }), Some(old_log_state), Some(new_log_state)) => {\n                            &&& new_log_state == old_log_state\n                            &&& head == old_log_state.head\n                            &&& new_head < head\n                        },\n                        (Err(InfiniteLogErr::CantAdvanceHeadPositionBeyondTail{ tail }), Some(old_log_state), Some(new_log_state)) => {\n                            &&& new_log_state == old_log_state\n                            &&& tail == old_log_state.head + old_log_state.log.len()\n                            &&& new_head > tail\n                        },\n                        (_, _, _) => false\n                    }\n                })"
+  },
+  "probe:pmemlog/0.1.0/main_t/InfiniteLogImpl<u64>#start()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 119,
+      "lines-end": 147
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                pm.inv(),\n                pm@.len() == device_size,\n                recovery_view()(pm@) is Some",
+    "ensures_text": "ensures\n                match result {\n                    Ok(trusted_log_impl) => {\n                        &&& trusted_log_impl.valid()\n                        &&& trusted_log_impl@ == recovery_view()(pm@)\n                        &&& trusted_log_impl.constants() == pm.constants()\n                    },\n                    Err(InfiniteLogErr::CRCMismatch) => !pm.constants().impervious_to_corruption,\n                    _ => false\n                }"
+  },
+  "probe:pmemlog/0.1.0/pmemmock_t/VolatileMemoryMockingPersistentMemory#PersistentMemory<u64>#write()": {
+    "code-path": "src/pmemmock_t.rs",
+    "spec-text": {
+      "lines-start": 49,
+      "lines-end": 54
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/live_data_view_eq()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 871,
+      "lines-end": 892
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/pmemmock_t/VolatileMemoryMockingPersistentMemory#PersistentMemory<u64>#read()": {
+    "code-path": "src/pmemmock_t.rs",
+    "spec-text": {
+      "lines-start": 41,
+      "lines-end": 47
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/main_t/read_correct_modulo_corruption()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 20,
+      "lines-end": 32
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<Result<UntrustedLogImpl,/InfiniteLogErr>\nwhere\n////Perm:/CheckPermission<Seq<u8>>,\n////PM:/PersistentMemory,>#untrusted_start()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1494,
+      "lines-end": 1579
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                Self::recover(old(wrpm)@) is Some,\n                old(wrpm).inv(),\n                old(wrpm)@.len() == device_size,\n                header_crc_offset < header_crc_offset + crc_size <= header_head_offset < header_tail_offset < header_log_size_offset,\n                // The restriction on writing persistent memory during initialization is\n                // that it can't change the interpretation of that memory's contents.\n                ({\n                    forall |pm_state| #[trigger] perm.check_permission(pm_state) <==>\n                        Self::recover(pm_state) ==\n                        Self::recover(old(wrpm)@)\n                }),",
+    "ensures_text": "ensures\n                Self::recover(old(wrpm)@) == Self::recover(wrpm@),\n                wrpm.constants() == old(wrpm).constants(),\n                match result {\n                    Ok(log_impl) => log_impl.inv(wrpm),\n                    Err(InfiniteLogErr::CRCMismatch) => !wrpm.constants().impervious_to_corruption,\n                    _ => false\n                }"
+  },
+  "probe:pmemlog/0.1.0/main_t/&mut/InfiniteLogImpl<PM>#InfiniteLogImpl<u64>#advance_head()": {
+    "code-path": "src/main_t.rs",
+    "spec-text": {
+      "lines-start": 190,
+      "lines-end": 230
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                old(self).valid()",
+    "ensures_text": "ensures\n                self.valid(),\n                self.constants() == old(self).constants(),\n                match result {\n                    Ok(offset) => {\n                        match (old(self)@, self@) {\n                            (Some(old_log), Some(new_log)) => {\n                                &&& old_log.head <= new_head <= old_log.head + old_log.log.len()\n                                &&& new_log == old_log.advance_head(new_head as int)\n                            },\n                            _ => false\n                        }\n                    }\n                    Err(InfiniteLogErr::CantAdvanceHeadPositionBeforeHead{ head }) => {\n                        &&& self@ == old(self)@\n                        &&& head == self@.unwrap().head\n                        &&& new_head < head\n                    },\n                    Err(InfiniteLogErr::CantAdvanceHeadPositionBeyondTail{ tail }) => {\n                        &&& self@ == old(self)@\n                        &&& tail == self@.unwrap().head + self@.unwrap().log.len()\n                        &&& new_head > tail\n                    },\n                    _ => false\n                }"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/crc_and_metadata_bytes_to_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 295,
+      "lines-end": 315
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            crc_bytes@.len() == 8,\n            header_bytes@.len() == header_size - 8",
+    "ensures_text": "ensures\n            out.crc == spec_u64_from_le_bytes(crc_bytes@),\n            out.metadata == spec_bytes_to_metadata(header_bytes@)"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_between()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 163,
+      "lines-end": 195
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            x % d < y % d,\n            y - x <= d,\n            x <= z <= y",
+    "ensures_text": "ensures\n            x % d <= z % d <= y % d"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/bytes_to_metadata()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 249,
+      "lines-end": 264
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            bytes@.len() == header_size - 8",
+    "ensures_text": "ensures\n            out == spec_bytes_to_metadata(bytes@)"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&mut/UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_append()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1581,
+      "lines-end": 1696
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                old(self).inv(&*old(wrpm)),\n                Self::recover(old(wrpm)@) is Some,\n                ({\n                    let old_log_state = Self::recover(old(wrpm)@);\n                    forall |pm_state| #[trigger] perm.check_permission(pm_state) <==> {\n                        let log_state = Self::recover(pm_state);\n                        log_state == old_log_state || log_state == Some(old_log_state.unwrap().append(bytes_to_append@))\n                    }\n                }),",
+    "ensures_text": "ensures\n                self.inv(wrpm),\n                wrpm.constants() == old(wrpm).constants(),\n                ({\n                    let old_log_state = Self::recover(old(wrpm)@);\n                    let new_log_state = Self::recover(wrpm@);\n                    match (result, old_log_state, new_log_state) {\n                        (Ok(offset), Some(old_log_state), Some(new_log_state)) => {\n                            &&& offset as nat == old_log_state.log.len() + old_log_state.head\n                            &&& new_log_state == old_log_state.append(bytes_to_append@)\n                        },\n                        (Err(InfiniteLogErr::InsufficientSpaceForAppend{ available_space }), _, _) => {\n                            &&& new_log_state == old_log_state\n                            &&& available_space < bytes_to_append@.len()\n                            &&& {\n                                   let log = old_log_state.unwrap();\n                                   ||| available_space == log.capacity - log.log.len()\n                                   ||| available_space == u64::MAX - log.head - log.log.len()\n                               }\n                        },\n                        (_, _, _) => false\n                    }\n                }),"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_not_between()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 197,
+      "lines-end": 228
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            d > 0,\n            y % d < x % d,\n            y - x <= d,\n            x <= z <= y",
+    "ensures_text": "ensures\n            z % d <= y % d || z % d >= x % d"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mul_div_equal()": {
+    "code-path": "src/math_v.rs",
+    "spec-text": {
+      "lines-start": 324,
+      "lines-end": 330
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            q * d <= x < (q + 1) * d",
+    "ensures_text": "ensures\n            (x / d) == q"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_headers_unchanged()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1007,
+      "lines-end": 1021
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            old_pm.len() == new_pm.len(),\n            old_pm.len() >= contents_offset,\n            old_pm.subrange(header1_pos as int, header1_pos + header_size) =~= new_pm.subrange(header1_pos as int, header1_pos + header_size),\n            old_pm.subrange(header2_pos as int, header2_pos + header_size) =~= new_pm.subrange(header2_pos as int, header2_pos + header_size),",
+    "ensures_text": "ensures\n            ({\n                let (_, old_headers, _) = pm_to_views(old_pm);\n                let (_, new_headers, _) = pm_to_views(new_pm);\n                old_headers == new_headers\n            })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/&UntrustedLogImpl#UntrustedLogImpl<&WriteRestrictedPersistentMemory<Perm>#untrusted_read()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1954,
+      "lines-end": 2061
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                self.inv(wrpm),\n                Self::recover(wrpm@) is Some,",
+    "ensures_text": "ensures\n                ({\n                    let log = Self::recover(wrpm@).unwrap();\n                    match result {\n                        Ok(bytes) => {\n                            let true_bytes = log.log.subrange(pos - log.head, pos + len - log.head);\n                            &&& pos >= log.head\n                            &&& pos + len <= log.head + log.log.len()\n                            &&& read_correct_modulo_corruption(bytes@, true_bytes,\n                                                             wrpm.constants().impervious_to_corruption)\n                        },\n                        Err(InfiniteLogErr::CantReadBeforeHead{ head: head_pos }) => {\n                            &&& pos < log.head\n                            &&& head_pos == log.head\n                        },\n                        Err(InfiniteLogErr::CantReadPastTail{ tail }) => {\n                            &&& pos + len > log.head + log.log.len()\n                            &&& tail == log.head + log.log.len()\n                        },\n                        _ => false\n                    }\n                })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_inactive_header_update_view_crash()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 584,
+      "lines-end": 630
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            header_pos == header1_pos || header_pos == header2_pos,\n            ({\n                // the new bytes must be written to the inactive header\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                &&& old_ib == cdb0_val ==> header_pos == header2_pos\n                &&& old_ib == cdb1_val ==> header_pos == header1_pos\n            }),\n            new_header_bytes.len() == header_size,\n            pm.len() > contents_offset,",
+    "ensures_text": "ensures\n            ({\n                let new_pm = update_contents_to_reflect_partially_flushed_write(\n                    pm, header_pos, new_header_bytes, chunks_flushed);\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == new_ib\n                &&& old_data =~= old_data\n                &&& header_pos == header1_pos ==>\n                    old_headers.header2 == new_headers.header2\n                &&& header_pos == header2_pos ==>\n                    old_headers.header1 == new_headers.header1\n                &&& UntrustedLogImpl::recover(new_pm) is Some\n            })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_bytes_combine_into_header()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 126,
+      "lines-end": 147
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            crc_bytes.len() == 8,\n            metadata_bytes.len() == header_size - 8,\n            spec_bytes_to_header((crc_bytes + metadata_bytes)) == header,",
+    "ensures_text": "ensures\n            ({\n                let combined_header = PersistentHeader { crc: spec_u64_from_le_bytes(crc_bytes), metadata: spec_bytes_to_metadata(metadata_bytes) };\n                header == combined_header\n            })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_subsubrange_equality()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 970,
+      "lines-end": 982
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            0 <= i <= j <= s1.len(),\n            j <= s2.len(),\n            s1.subrange(i, j) == s2.subrange(i, j)",
+    "ensures_text": "ensures\n            forall |k, m| i <= k <= m <= j ==> s1.subrange(k, m) == s2.subrange(k, m)"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/metadata_to_bytes()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 266,
+      "lines-end": 293
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": false,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "ensures_text": "ensures\n            metadata == spec_bytes_to_metadata(out@),\n            out@.len() == header_size - 8,"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<u64>#addr_logical_to_physical()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1173,
+      "lines-end": 1182
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                addr <= u64::MAX,\n                log_size > 0,\n                log_size + contents_offset <= u64::MAX,",
+    "ensures_text": "ensures\n                out == spec_addr_logical_to_physical(addr as int, log_size as int)"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/pm_to_views()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 45,
+      "lines-end": 72
+    },
+    "context": "standalone",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_incorruptible_bool_unchanged()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1023,
+      "lines-end": 1034
+    },
+    "context": "standalone",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n            old_pm.len() == new_pm.len(),\n            old_pm.len() >= contents_offset,\n            old_pm.subrange(incorruptible_bool_pos as int, incorruptible_bool_pos + 8) =~= new_pm.subrange(incorruptible_bool_pos as int, incorruptible_bool_pos + 8)",
+    "ensures_text": "ensures\n            ({\n                let (old_ib, _, _) = pm_to_views(old_pm);\n                let (new_ib, _, _) = pm_to_views(new_pm);\n                old_ib == new_ib\n            })"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl#UntrustedLogImpl<Seq<u8>>#inv_pm_contents()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1248,
+      "lines-end": 1271
+    },
+    "context": "impl",
+    "specified": false,
+    "has_requires": false,
+    "has_ensures": false,
+    "has_trusted_assumption": false
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/UntrustedLogImpl<&PM>#read_incorruptible_boolean()": {
+    "code-path": "src/logimpl_v.rs",
+    "spec-text": {
+      "lines-start": 1285,
+      "lines-end": 1315
+    },
+    "context": "impl",
+    "specified": true,
+    "has_requires": true,
+    "has_ensures": true,
+    "has_trusted_assumption": false,
+    "requires_text": "requires\n                Self::recover(pm@) is Some,\n                pm.inv(),\n                pm@.len() > contents_offset",
+    "ensures_text": "ensures\n                match result {\n                    Ok(ib) => {\n                        let (spec_ib, _, _) = pm_to_views(pm@);\n                        ib == spec_ib\n                    }\n                    Err(InfiniteLogErr::CRCMismatch) => !pm.constants().impervious_to_corruption,\n                    _ => false,\n                }"
+  }
+}
