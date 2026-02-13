@@ -39,7 +39,7 @@ on:
           - mainnet
           - sepolia
       taxonomy_config:
-        description: 'Path to spec taxonomy TOML config (relative to project root, optional)'
+        description: 'Path to spec taxonomy TOML (relative to project root). Auto-detects spec-taxonomy.toml if left empty.'
         required: false
         default: ''
         type: string
@@ -131,14 +131,23 @@ jobs:
           # Build command with optional taxonomy config
           CMD="probe-verus specify $PROJECT_SRC -a $ATOMS_FILE -o $SPECS_FILE --with-spec-text"
           
+          # Resolve taxonomy config: explicit input > auto-detect at project root
+          TAXONOMY_PATH=""
           if [ -n "$TAXONOMY_CONFIG" ]; then
             TAXONOMY_PATH="target/${{ inputs.project_path }}/$TAXONOMY_CONFIG"
-            if [ -f "$TAXONOMY_PATH" ]; then
-              echo "Taxonomy:   $TAXONOMY_PATH"
-              CMD="$CMD --taxonomy-config $TAXONOMY_PATH"
-            else
-              echo "::warning::Taxonomy config not found at $TAXONOMY_PATH — skipping classification"
+          else
+            # Auto-detect spec-taxonomy.toml at the project root
+            DEFAULT_PATH="target/${{ inputs.project_path }}/spec-taxonomy.toml"
+            if [ -f "$DEFAULT_PATH" ]; then
+              TAXONOMY_PATH="$DEFAULT_PATH"
             fi
+          fi
+          
+          if [ -n "$TAXONOMY_PATH" ] && [ -f "$TAXONOMY_PATH" ]; then
+            echo "Taxonomy:   $TAXONOMY_PATH"
+            CMD="$CMD --taxonomy-config $TAXONOMY_PATH"
+          elif [ -n "$TAXONOMY_CONFIG" ]; then
+            echo "::warning::Taxonomy config not found at $TAXONOMY_PATH — skipping classification"
           fi
           
           eval $CMD
