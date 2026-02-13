@@ -38,6 +38,11 @@ on:
         options:
           - mainnet
           - sepolia
+      taxonomy_config:
+        description: 'Path to spec taxonomy TOML config (relative to project root, optional)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write  # To update certifications directory
@@ -106,9 +111,11 @@ jobs:
           # Run probe-verus specify to extract the spec manifest.
           # Requires atoms.json (produced by the verify action's atomize step).
           # --with-spec-text includes the actual requires/ensures clause text.
+          # --taxonomy-config classifies each spec by category (optional).
           SPECS_FILE="./output/specs.json"
           ATOMS_FILE="${{ steps.verify.outputs.atoms-file }}"
           PROJECT_SRC="target/${{ inputs.project_path }}"
+          TAXONOMY_CONFIG="${{ inputs.taxonomy_config }}"
           
           if [ -z "$ATOMS_FILE" ] || [ ! -f "$ATOMS_FILE" ]; then
             echo "::warning::atoms.json not found — skipping spec extraction"
@@ -121,15 +128,35 @@ jobs:
           echo "Atoms:      $ATOMS_FILE"
           echo "Output:     $SPECS_FILE"
           
-          probe-verus specify "$PROJECT_SRC" \
-            -a "$ATOMS_FILE" \
-            -o "$SPECS_FILE" \
-            --with-spec-text
+          # Build command with optional taxonomy config
+          CMD="probe-verus specify $PROJECT_SRC -a $ATOMS_FILE -o $SPECS_FILE --with-spec-text"
+          
+          if [ -n "$TAXONOMY_CONFIG" ]; then
+            TAXONOMY_PATH="target/${{ inputs.project_path }}/$TAXONOMY_CONFIG"
+            if [ -f "$TAXONOMY_PATH" ]; then
+              echo "Taxonomy:   $TAXONOMY_PATH"
+              CMD="$CMD --taxonomy-config $TAXONOMY_PATH"
+            else
+              echo "::warning::Taxonomy config not found at $TAXONOMY_PATH — skipping classification"
+            fi
+          fi
+          
+          eval $CMD
           
           if [ -f "$SPECS_FILE" ]; then
             echo "specs_file=$(realpath "$SPECS_FILE")" >> $GITHUB_OUTPUT
             SPEC_COUNT=$(jq 'length' "$SPECS_FILE")
             echo "Specs extracted: $SPEC_COUNT functions"
+            
+            # Extract taxonomy summary if spec-labels are present
+            LABELED=$(jq '[.[] | select(."spec-labels" and (."spec-labels" | length > 0))] | length' "$SPECS_FILE")
+            if [ "$LABELED" -gt 0 ]; then
+              echo "Classified: $LABELED / $SPEC_COUNT functions"
+              # Build label counts
+              LABEL_SUMMARY=$(jq -r '[.[].["spec-labels"] // [] | .[]] | group_by(.) | map("\(length) \(.[0])") | join(", ")' "$SPECS_FILE")
+              echo "Labels:     $LABEL_SUMMARY"
+              echo "taxonomy_summary=$LABEL_SUMMARY" >> $GITHUB_OUTPUT
+            fi
           else
             echo "::warning::probe-verus specify did not produce specs.json"
             echo "specs_file=" >> $GITHUB_OUTPUT
@@ -145,6 +172,10 @@ jobs:
           echo "- **Verified**: ${{ steps.verify.outputs.verified-count }} / ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.specify.outputs.specs_file }}" ]; then
             echo "- **Specs**: Extracted (Merkle certification)" >> $GITHUB_STEP_SUMMARY
+          fi
+          TAXONOMY_SUMMARY="${{ steps.specify.outputs.taxonomy_summary }}"
+          if [ -n "$TAXONOMY_SUMMARY" ]; then
+            echo "- **Taxonomy**: $TAXONOMY_SUMMARY" >> $GITHUB_STEP_SUMMARY
           fi
 
       # ═══════════════════════════════════════════════════════════════
@@ -323,6 +354,11 @@ jobs:
           echo "## Certification Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Transaction**: [${{ steps.certify.outputs.tx_hash }}](${{ steps.certify.outputs.etherscan_url }})" >> $GITHUB_STEP_SUMMARY
+          TAXONOMY_SUMMARY="${{ steps.specify.outputs.taxonomy_summary }}"
+          if [ -n "$TAXONOMY_SUMMARY" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Spec Taxonomy**: $TAXONOMY_SUMMARY" >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Badge for ${{ steps.repo.outputs.repo_path }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -289,6 +289,27 @@ jobs:
             echo "merkle_verified=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Extract taxonomy from stored specs
+        id: taxonomy
+        if: steps.lookup.outputs.specs_file != ''
+        working-directory: certify
+        run: |
+          CERT_ID="${{ steps.repo.outputs.cert_id }}"
+          SPECS_FILE="${{ steps.lookup.outputs.specs_file }}"
+          FULL_SPECS="certifications/${CERT_ID}/${SPECS_FILE}"
+          
+          if [ -f "$FULL_SPECS" ]; then
+            LABELED=$(jq '[.[] | select(."spec-labels" and (."spec-labels" | length > 0))] | length' "$FULL_SPECS")
+            TOTAL=$(jq 'length' "$FULL_SPECS")
+            if [ "$LABELED" -gt 0 ]; then
+              LABEL_SUMMARY=$(jq -r '[.[].["spec-labels"] // [] | .[]] | group_by(.) | map("\(length) \(.[0])") | join(", ")' "$FULL_SPECS")
+              echo "taxonomy_summary=$LABEL_SUMMARY" >> $GITHUB_OUTPUT
+              echo "Taxonomy: $LABELED / $TOTAL classified — $LABEL_SUMMARY"
+            else
+              echo "No taxonomy labels in stored specs"
+            fi
+          fi
+
       - name: Verify on-chain certification
         id: verify-onchain
         working-directory: certify
@@ -463,6 +484,12 @@ jobs:
             else
               echo "- ❌ **Merkle Structure**: Hash mismatch in Merkle tree!" >> $GITHUB_STEP_SUMMARY
             fi
+          fi
+          
+          # Taxonomy breakdown (if spec-labels are present in stored specs)
+          TAXONOMY_SUMMARY="${{ steps.taxonomy.outputs.taxonomy_summary }}"
+          if [ -n "$TAXONOMY_SUMMARY" ]; then
+            echo "- **Spec Taxonomy**: $TAXONOMY_SUMMARY" >> $GITHUB_STEP_SUMMARY
           fi
           
           # On-chain check
