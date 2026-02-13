@@ -185,7 +185,7 @@ jobs:
         run: |
           CERT_ID="${{ steps.repo.outputs.cert_id }}"
           RESULTS_FILE="${{ steps.lookup.outputs.results_file }}"
-          EXPECTED_HASH="${{ steps.lookup.outputs.content_hash }}"
+          EXPECTED_HASH="${{ steps.lookup.outputs.results_hash }}"
           
           echo "╔══════════════════════════════════════════════════════════════════╗"
           echo "║              VERIFYING STORED RESULTS HASH                       ║"
