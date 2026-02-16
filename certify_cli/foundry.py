@@ -209,23 +209,32 @@ def compute_content_hash(source: str, filename: Optional[str] = None) -> str:
 def compute_merkle_content_hash(
     results_source: str,
     specs_source: str,
-) -> tuple[str, str, str]:
-    """Compute a Merkle-style content hash from results and specs files.
+    proofs_source: Optional[str] = None,
+) -> tuple[str, str, str, Optional[str]]:
+    """Compute a Merkle-style content hash from results, specs, and optionally proofs.
 
-    The on-chain hash is the keccak256 of the concatenation of the two
+    The on-chain hash is the keccak256 of the concatenation of the
     individual hashes (each a 32-byte value).  This allows independent
-    verification of either artifact while only requiring a single
+    verification of each artifact while only requiring a single
     on-chain transaction.
+
+    When proofs_source is provided, the Merkle tree has three leaves:
+        content_hash = keccak256(results_hash || specs_hash || proofs_hash)
+
+    When proofs_source is None (backwards compatible), it uses two leaves:
+        content_hash = keccak256(results_hash || specs_hash)
 
     Args:
         results_source: Path/URL/artifact reference for results.json
         specs_source: Path/URL/artifact reference for specs.json
+        proofs_source: Optional path/URL/artifact reference for proofs.json
 
     Returns:
-        Tuple of (content_hash, results_hash, specs_hash) where:
+        Tuple of (content_hash, results_hash, specs_hash, proofs_hash) where:
           results_hash = keccak256(results.json)
           specs_hash   = keccak256(specs.json)
-          content_hash = keccak256(results_hash || specs_hash)  (Merkle root)
+          proofs_hash  = keccak256(proofs.json) or None
+          content_hash = keccak256(results_hash || specs_hash [|| proofs_hash])
     """
     results_content = fetch_content(results_source)
     specs_content = fetch_content(specs_source)
@@ -233,11 +242,18 @@ def compute_merkle_content_hash(
     results_hash = cast_keccak(results_content)
     specs_hash = cast_keccak(specs_content)
 
-    # Concatenate the raw 32-byte hashes and hash the pair
+    # Concatenate the raw 32-byte hashes
     combined = bytes.fromhex(results_hash[2:]) + bytes.fromhex(specs_hash[2:])
+
+    proofs_hash = None
+    if proofs_source:
+        proofs_content = fetch_content(proofs_source)
+        proofs_hash = cast_keccak(proofs_content)
+        combined += bytes.fromhex(proofs_hash[2:])
+
     content_hash = cast_keccak(combined)
 
-    return content_hash, results_hash, specs_hash
+    return content_hash, results_hash, specs_hash, proofs_hash
 
 
 def _is_url(source: str) -> bool:

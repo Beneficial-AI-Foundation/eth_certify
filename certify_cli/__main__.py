@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import CertifyConfig, EnvConfig, Network
 from .deploy import certify_content, deploy_contract
+from .proofs import build_proofs_json, summarise_proofs, write_proofs_json
 from .registry import update_registry
 from .verify import verify_by_content_hash, verify_content
 
@@ -203,10 +204,69 @@ def main() -> int:
         help="Path to specification manifest JSON to store",
     )
     registry_parser.add_argument(
+        "--proof-bundle-dir",
+        type=str,
+        default=None,
+        help="Path to proof bundle directory (proofs.json + smt_queries/ + z3_proofs/)",
+    )
+    registry_parser.add_argument(
+        "--proofs-hash",
+        type=str,
+        default=None,
+        help="keccak256 hash of proofs.json (Merkle leaf)",
+    )
+    registry_parser.add_argument(
         "--base-dir",
         type=str,
         default="certifications",
         help="Base directory for certifications (default: certifications)",
+    )
+
+    # Generate-proofs command
+    proofs_parser = subparsers.add_parser(
+        "generate-proofs",
+        help="Generate Z3 proof certificates from Verus SMT logs",
+    )
+    proofs_parser.add_argument(
+        "--smt-log-dir",
+        type=str,
+        required=True,
+        help="Directory containing Verus .smt2 log files (from --log smt -V spinoff-all)",
+    )
+    proofs_parser.add_argument(
+        "--results-file",
+        type=str,
+        required=True,
+        help="Path to verification results JSON (from probe-verus verify)",
+    )
+    proofs_parser.add_argument(
+        "--specs-file",
+        type=str,
+        default=None,
+        help="Path to specs JSON (from probe-verus specify)",
+    )
+    proofs_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="proof-bundle",
+        help="Output directory for proof bundle (proofs.json + smt_queries/ + z3_proofs/)",
+    )
+    proofs_parser.add_argument(
+        "--z3-binary",
+        type=str,
+        default="z3",
+        help="Path to Z3 binary (default: z3)",
+    )
+    proofs_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=300,
+        help="Z3 timeout per function in seconds (default: 300)",
+    )
+    proofs_parser.add_argument(
+        "--no-proofs",
+        action="store_true",
+        help="Skip Z3 proof generation (only map functions to .smt2 queries)",
     )
 
     args = parser.parse_args()
@@ -222,6 +282,8 @@ def main() -> int:
             return _handle_verify_hash(args)
         elif args.command == "update-registry":
             return _handle_update_registry(args)
+        elif args.command == "generate-proofs":
+            return _handle_generate_proofs(args)
     except FileNotFoundError as e:
         print(f"Error: {e}")
         return 1
@@ -365,9 +427,60 @@ def _handle_update_registry(args: argparse.Namespace) -> int:
         results_hash=args.results_hash,
         specs_hash=args.specs_hash,
         specs_file=args.specs_file,
+        proof_bundle_dir=args.proof_bundle_dir,
+        proofs_hash=args.proofs_hash,
     )
     print(result.message)
     return 0 if result.success else 1
+
+
+def _handle_generate_proofs(args: argparse.Namespace) -> int:
+    """Handle the generate-proofs command."""
+    import json
+
+    smt_log_dir = Path(args.smt_log_dir)
+    results_path = Path(args.results_file)
+    specs_path = Path(args.specs_file) if args.specs_file else None
+    output_dir = Path(args.output_dir)
+
+    if not smt_log_dir.is_dir():
+        print(f"Error: SMT log directory not found: {smt_log_dir}")
+        return 1
+
+    if not results_path.is_file():
+        print(f"Error: Results file not found: {results_path}")
+        return 1
+
+    print("Generating Z3 proof certificates...")
+    print(f"  SMT log dir:  {smt_log_dir}")
+    print(f"  Results file: {results_path}")
+    if specs_path:
+        print(f"  Specs file:   {specs_path}")
+    print(f"  Output dir:   {output_dir}")
+    print(f"  Generate Z3 proofs: {not args.no_proofs}")
+    print()
+
+    proofs = build_proofs_json(
+        smt_log_dir=smt_log_dir,
+        output_dir=output_dir,
+        results_path=results_path,
+        specs_path=specs_path,
+        z3_binary=args.z3_binary,
+        timeout_seconds=args.timeout,
+        generate_proofs=not args.no_proofs,
+    )
+
+    proofs_path = write_proofs_json(proofs, output_dir)
+
+    results = json.loads(results_path.read_text())
+    summary = summarise_proofs(proofs, results)
+    summary.print_report()
+
+    print(f"\nProof bundle written to {output_dir}/")
+    print(f"  proofs.json:    {proofs_path}")
+    print(f"  smt_queries/:   {len([e for e in proofs.values() if e.get('z3_formula')])} files")
+    print(f"  z3_proofs/:     {len([e for e in proofs.values() if e.get('z3_proof', {}).get('file')])} files")
+    return 0
 
 
 def _parse_network(network_str: str) -> Network:

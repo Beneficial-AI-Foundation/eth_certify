@@ -97,13 +97,14 @@ jobs:
       # ═══════════════════════════════════════════════════════════════
       # STEP 1: Run Verus Verification + Spec Extraction
       # ═══════════════════════════════════════════════════════════════
-      - name: Run Verus verification
+      - name: Run Verus verification (with SMT logging)
         uses: beneficial-ai-foundation/probe-verus/action@v1
         id: verify
         with:
           project-path: target/${{ inputs.project_path }}
           package: ${{ inputs.package }}
           output-dir: ./output
+          verus-args: '--log smt --log-dir ./verus-smt-logs -V spinoff-all'
 
       - name: Extract Verus specifications
         id: specify
@@ -171,6 +172,62 @@ jobs:
             echo "specs_file=" >> $GITHUB_OUTPUT
           fi
 
+      - name: Generate Z3 proof certificates
+        id: proofs
+        working-directory: certify
+        run: |
+          RESULTS_FILE="${{ steps.verify.outputs.results-file }}"
+          SPECS_FILE="${{ steps.specify.outputs.specs_file }}"
+          PROJECT_PATH="../target/${{ inputs.project_path }}"
+          SMT_LOG_DIR="$PROJECT_PATH/verus-smt-logs"
+          PROOF_BUNDLE_DIR="./output/proof-bundle"
+          
+          # Check if SMT logs were produced
+          if [ ! -d "$SMT_LOG_DIR" ]; then
+            echo "::warning::SMT log directory not found at $SMT_LOG_DIR — skipping proof generation"
+            echo "proof_bundle_dir=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          SMT_COUNT=$(ls "$SMT_LOG_DIR"/*.smt2 2>/dev/null | wc -l)
+          echo "Found $SMT_COUNT .smt2 files in $SMT_LOG_DIR"
+          
+          if [ "$SMT_COUNT" -eq 0 ]; then
+            echo "::warning::No .smt2 files found — skipping proof generation"
+            echo "proof_bundle_dir=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Build command -- produces a self-contained bundle directory:
+          #   proof-bundle/proofs.json       (the index)
+          #   proof-bundle/smt_queries/*.smt2 (the Z3 formulas)
+          #   proof-bundle/z3_proofs/*.proof   (the Z3 proofs)
+          CMD="uv run python3 -m certify_cli generate-proofs"
+          CMD="$CMD --smt-log-dir $SMT_LOG_DIR"
+          CMD="$CMD --results-file $RESULTS_FILE"
+          CMD="$CMD --output-dir $PROOF_BUNDLE_DIR"
+          CMD="$CMD --z3-binary z3"
+          CMD="$CMD --timeout 300"
+          
+          if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
+            CMD="$CMD --specs-file $SPECS_FILE"
+          fi
+          
+          echo "Running: $CMD"
+          eval $CMD
+          
+          PROOFS_FILE="$PROOF_BUNDLE_DIR/proofs.json"
+          if [ -f "$PROOFS_FILE" ]; then
+            echo "proof_bundle_dir=$(realpath "$PROOF_BUNDLE_DIR")" >> $GITHUB_OUTPUT
+            PROOF_COUNT=$(jq 'length' "$PROOFS_FILE")
+            echo "Proof bundle: $PROOF_COUNT functions in $PROOF_BUNDLE_DIR"
+            echo "  smt_queries: $(ls "$PROOF_BUNDLE_DIR/smt_queries/"*.smt2 2>/dev/null | wc -l) files"
+            echo "  z3_proofs:   $(ls "$PROOF_BUNDLE_DIR/z3_proofs/"*.proof 2>/dev/null | wc -l) files"
+          else
+            echo "::warning::proofs.json was not produced"
+            echo "proof_bundle_dir=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Verification summary
         run: |
           echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
@@ -181,6 +238,9 @@ jobs:
           echo "- **Verified**: ${{ steps.verify.outputs.verified-count }} / ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
           if [ -n "${{ steps.specify.outputs.specs_file }}" ]; then
             echo "- **Specs**: Extracted (Merkle certification)" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ steps.proofs.outputs.proof_bundle_dir }}" ]; then
+            echo "- **Proof Certificates**: Generated (Z3 formulas + proofs archived)" >> $GITHUB_STEP_SUMMARY
           fi
           TAXONOMY_SUMMARY="${{ steps.specify.outputs.taxonomy_summary }}"
           if [ -n "$TAXONOMY_SUMMARY" ]; then
@@ -196,6 +256,7 @@ jobs:
           # Create certify.conf
           RESULTS_PATH="$(realpath ../output/results.json)"
           SPECS_FILE="${{ steps.specify.outputs.specs_file }}"
+          PROOF_BUNDLE_DIR="${{ steps.proofs.outputs.proof_bundle_dir }}"
           
           cat > certify.conf << EOF
           CERTIFY_SOURCE="$RESULTS_PATH"
@@ -207,6 +268,13 @@ jobs:
             SPECS_PATH="$(realpath "$SPECS_FILE")"
             echo "CERTIFY_SPECS_SOURCE=\"$SPECS_PATH\"" >> certify.conf
           fi
+          
+          # Note: proof bundle is archived separately in the registry step.
+          # It is not yet included in the on-chain Merkle hash (Phase 3 milestone).
+          # When ready, uncomment the following to include proofs in the hash:
+          # if [ -n "$PROOF_BUNDLE_DIR" ] && [ -f "$PROOF_BUNDLE_DIR/proofs.json" ]; then
+          #   echo "CERTIFY_PROOFS_SOURCE=\"$PROOF_BUNDLE_DIR/proofs.json\"" >> certify.conf
+          # fi
           
           cat certify.conf
 
@@ -322,6 +390,12 @@ jobs:
           fi
           if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
             CMD="$CMD --specs-file \"$SPECS_FILE\""
+          fi
+          
+          # Add proof bundle directory if available
+          PROOF_BUNDLE_DIR="${{ steps.proofs.outputs.proof_bundle_dir }}"
+          if [ -n "$PROOF_BUNDLE_DIR" ] && [ -d "$PROOF_BUNDLE_DIR" ]; then
+            CMD="$CMD --proof-bundle-dir \"$PROOF_BUNDLE_DIR\""
           fi
           
           echo "Running: $CMD"

@@ -27,6 +27,8 @@ class CertificationEntry:
     results_hash: Optional[str] = None  # keccak256(results.json) — Merkle leaf
     specs_hash: Optional[str] = None  # keccak256(specs.json) — Merkle leaf
     specs_file: Optional[str] = None  # Archived specs file path
+    proof_bundle: Optional[str] = None  # Archived proof bundle directory path
+    proofs_hash: Optional[str] = None  # keccak256(proofs.json) — Merkle leaf
 
 
 @dataclass
@@ -55,6 +57,8 @@ def update_registry(
     results_hash: Optional[str] = None,
     specs_hash: Optional[str] = None,
     specs_file: Optional[str] = None,
+    proof_bundle_dir: Optional[str] = None,
+    proofs_hash: Optional[str] = None,
 ) -> RegistryUpdateResult:
     """
     Update the certification registry with a new certification.
@@ -66,6 +70,7 @@ def update_registry(
     - README.md (badge instructions)
     - results/<timestamp>.json (verification results, if provided)
     - specs/<timestamp>.json (specification manifest, if provided)
+    - proofs/<timestamp>/ (proof bundle: proofs.json + smt_queries/ + z3_proofs/, if provided)
 
     Args:
         cert_id: Unique certification ID (e.g., "owner-repo")
@@ -136,6 +141,23 @@ def update_registry(
 
             stored_specs_path = f"specs/{timestamp_safe}.json"
 
+        # Store proof bundle if provided (proofs.json + smt_queries/ + z3_proofs/)
+        stored_proof_bundle = None
+        if proof_bundle_dir:
+            src_bundle = Path(proof_bundle_dir)
+            if src_bundle.is_dir() and (src_bundle / "proofs.json").exists():
+                # Copy timestamped snapshot
+                dest_bundle = cert_dir / "proofs" / timestamp_safe
+                shutil.copytree(src_bundle, dest_bundle)
+
+                # Also maintain a "latest" copy
+                latest_bundle = cert_dir / "proofs" / "latest"
+                if latest_bundle.exists():
+                    shutil.rmtree(latest_bundle)
+                shutil.copytree(src_bundle, latest_bundle)
+
+                stored_proof_bundle = f"proofs/{timestamp_safe}"
+
         # 1. Create badge.json for shields.io
         _create_badge_json(cert_dir, verified, total, percent)
 
@@ -159,6 +181,8 @@ def update_registry(
             results_hash=results_hash,
             specs_hash=specs_hash,
             specs_file=stored_specs_path,
+            proof_bundle=stored_proof_bundle,
+            proofs_hash=proofs_hash,
         )
         _update_history(cert_dir, entry)
 
@@ -307,6 +331,10 @@ def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
         new_entry["specs_hash"] = entry.specs_hash
     if entry.specs_file:
         new_entry["specs_file"] = entry.specs_file
+    if entry.proof_bundle:
+        new_entry["proof_bundle"] = entry.proof_bundle
+    if entry.proofs_hash:
+        new_entry["proofs_hash"] = entry.proofs_hash
 
     history["certifications"].insert(0, new_entry)
 
