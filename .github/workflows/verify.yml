@@ -1,13 +1,20 @@
 # Verify External Verus Projects
 #
 # This workflow verifies that a Verus project's certification is legitimate.
-# It performs two levels of verification:
+# It performs multiple levels of verification:
 #
 # 1. STORED RESULTS VERIFICATION: Verifies that the stored results.json from
 #    the certification registry matches the on-chain content hash. This confirms
 #    the certification record is authentic.
 #
-# 2. FRESH VERIFICATION (optional): Re-runs probe-verus on the commit and
+# 2. MERKLE STRUCTURE: Verifies that the Merkle tree (results_hash + specs_hash,
+#    optionally + proofs_hash) reconstructs the on-chain content hash.
+#
+# 3. PROOF BUNDLE INTEGRITY (if present): Verifies that all Z3 formula and proof
+#    files referenced in proofs.json are present and resolvable in the archived
+#    proof bundle.
+#
+# 4. FRESH VERIFICATION (optional): Re-runs probe-verus on the commit and
 #    compares the semantic results (verified count, total functions) with the
 #    stored certification. Note: Due to non-deterministic output (timestamps,
 #    ordering), the exact hash may differ, but the verification results should match.
@@ -147,6 +154,8 @@ jobs:
           RESULTS_HASH=$(echo "$CERT" | jq -r '.results_hash // empty')
           SPECS_HASH=$(echo "$CERT" | jq -r '.specs_hash // empty')
           SPECS_FILE=$(echo "$CERT" | jq -r '.specs_file // empty')
+          PROOF_BUNDLE=$(echo "$CERT" | jq -r '.proof_bundle // empty')
+          PROOFS_HASH=$(echo "$CERT" | jq -r '.proofs_hash // empty')
           
           echo "found=true" >> $GITHUB_OUTPUT
           echo "content_hash=$CONTENT_HASH" >> $GITHUB_OUTPUT
@@ -159,6 +168,8 @@ jobs:
           echo "results_hash=$RESULTS_HASH" >> $GITHUB_OUTPUT
           echo "specs_hash=$SPECS_HASH" >> $GITHUB_OUTPUT
           echo "specs_file=$SPECS_FILE" >> $GITHUB_OUTPUT
+          echo "proof_bundle=$PROOF_BUNDLE" >> $GITHUB_OUTPUT
+          echo "proofs_hash=$PROOFS_HASH" >> $GITHUB_OUTPUT
           
           echo ""
           echo "═══════════════════════════════════════════════════════════════════"
@@ -174,6 +185,10 @@ jobs:
             echo "Results Hash:   $RESULTS_HASH  (Merkle leaf)"
             echo "Specs Hash:     $SPECS_HASH  (Merkle leaf)"
             echo "Specs File:     $SPECS_FILE"
+          fi
+          if [ -n "$PROOF_BUNDLE" ]; then
+            echo "Proof Bundle:   $PROOF_BUNDLE"
+            echo "Proofs Hash:    $PROOFS_HASH  (Merkle leaf)"
           fi
 
       # ═══════════════════════════════════════════════════════════════
@@ -216,7 +231,7 @@ jobs:
             fi
           fi
 
-      - name: Verify Merkle structure (specs + results)
+      - name: Verify Merkle structure (specs + results + proofs)
         id: verify-merkle
         if: steps.lookup.outputs.results_hash != ''
         working-directory: certify
@@ -224,9 +239,11 @@ jobs:
           CERT_ID="${{ steps.repo.outputs.cert_id }}"
           RESULTS_HASH="${{ steps.lookup.outputs.results_hash }}"
           SPECS_HASH="${{ steps.lookup.outputs.specs_hash }}"
+          PROOFS_HASH="${{ steps.lookup.outputs.proofs_hash }}"
           EXPECTED_CONTENT_HASH="${{ steps.lookup.outputs.content_hash }}"
           RESULTS_FILE="${{ steps.lookup.outputs.results_file }}"
           SPECS_FILE="${{ steps.lookup.outputs.specs_file }}"
+          PROOF_BUNDLE="${{ steps.lookup.outputs.proof_bundle }}"
           
           echo "╔══════════════════════════════════════════════════════════════════╗"
           echo "║              VERIFYING MERKLE STRUCTURE                          ║"
@@ -267,12 +284,21 @@ jobs:
           fi
           echo ""
           
-          # 3. Verify Merkle root: keccak256(results_hash || specs_hash) == content_hash
+          # 3. Verify Merkle root
           # Concatenate the raw 32-byte hashes (strip 0x prefix) and hash
           COMBINED="${RESULTS_HASH#0x}${SPECS_HASH#0x}"
+          
+          # Include proofs_hash as third leaf if present
+          if [ -n "$PROOFS_HASH" ]; then
+            COMBINED="${COMBINED}${PROOFS_HASH#0x}"
+            echo "Merkle root check (3-leaf: results + specs + proofs):"
+            echo "  keccak256($RESULTS_HASH || $SPECS_HASH || $PROOFS_HASH)"
+          else
+            echo "Merkle root check (2-leaf: results + specs):"
+            echo "  keccak256($RESULTS_HASH || $SPECS_HASH)"
+          fi
+          
           COMPUTED_ROOT=$(echo -n "$COMBINED" | xxd -r -p | cast keccak)
-          echo "Merkle root check:"
-          echo "  keccak256($RESULTS_HASH || $SPECS_HASH)"
           echo "  Computed:  $COMPUTED_ROOT"
           echo "  Expected:  $EXPECTED_CONTENT_HASH"
           if [ "$COMPUTED_ROOT" = "$EXPECTED_CONTENT_HASH" ]; then
@@ -287,6 +313,88 @@ jobs:
             echo "merkle_verified=true" >> $GITHUB_OUTPUT
           else
             echo "merkle_verified=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify proof bundle integrity
+        id: verify-proofs
+        if: steps.lookup.outputs.proof_bundle != ''
+        working-directory: certify
+        run: |
+          CERT_ID="${{ steps.repo.outputs.cert_id }}"
+          PROOF_BUNDLE="${{ steps.lookup.outputs.proof_bundle }}"
+          BUNDLE_DIR="certifications/${CERT_ID}/${PROOF_BUNDLE}"
+          
+          echo "╔══════════════════════════════════════════════════════════════════╗"
+          echo "║              VERIFYING PROOF BUNDLE                              ║"
+          echo "╚══════════════════════════════════════════════════════════════════╝"
+          echo ""
+          
+          ALL_OK=true
+          
+          PROOFS_JSON="${BUNDLE_DIR}/proofs.json"
+          if [ ! -f "$PROOFS_JSON" ]; then
+            echo "❌ proofs.json not found at $PROOFS_JSON"
+            echo "proofs_verified=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          TOTAL_FUNCS=$(jq 'length' "$PROOFS_JSON")
+          echo "Proof bundle:     $BUNDLE_DIR"
+          echo "Functions:        $TOTAL_FUNCS"
+          echo ""
+          
+          # Check that all referenced files exist
+          MISSING_FORMULAS=0
+          MISSING_PROOFS=0
+          HAS_FORMULA=0
+          HAS_PROOF=0
+          
+          for KEY in $(jq -r 'keys[]' "$PROOFS_JSON"); do
+            FORMULA=$(jq -r --arg k "$KEY" '.[$k].z3_formula.file // empty' "$PROOFS_JSON")
+            PROOF=$(jq -r --arg k "$KEY" '.[$k].z3_proof.file // empty' "$PROOFS_JSON")
+            
+            if [ -n "$FORMULA" ]; then
+              if [ -f "${BUNDLE_DIR}/${FORMULA}" ]; then
+                HAS_FORMULA=$((HAS_FORMULA + 1))
+              else
+                MISSING_FORMULAS=$((MISSING_FORMULAS + 1))
+              fi
+            fi
+            
+            if [ -n "$PROOF" ]; then
+              if [ -f "${BUNDLE_DIR}/${PROOF}" ]; then
+                HAS_PROOF=$((HAS_PROOF + 1))
+              else
+                MISSING_PROOFS=$((MISSING_PROOFS + 1))
+              fi
+            fi
+          done
+          
+          echo "Z3 formulas:      $HAS_FORMULA present"
+          if [ "$MISSING_FORMULAS" -gt 0 ]; then
+            echo "  ❌ $MISSING_FORMULAS formula files missing!"
+            ALL_OK=false
+          else
+            echo "  ✅ All formula files resolve"
+          fi
+          
+          echo "Z3 proofs:        $HAS_PROOF present"
+          if [ "$MISSING_PROOFS" -gt 0 ]; then
+            echo "  ❌ $MISSING_PROOFS proof files missing!"
+            ALL_OK=false
+          else
+            echo "  ✅ All proof files resolve"
+          fi
+          echo ""
+          
+          echo "total_functions=$TOTAL_FUNCS" >> $GITHUB_OUTPUT
+          echo "formulas=$HAS_FORMULA" >> $GITHUB_OUTPUT
+          echo "proofs=$HAS_PROOF" >> $GITHUB_OUTPUT
+          
+          if [ "$ALL_OK" = "true" ]; then
+            echo "proofs_verified=true" >> $GITHUB_OUTPUT
+          else
+            echo "proofs_verified=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Extract taxonomy from stored specs
@@ -453,6 +561,11 @@ jobs:
           echo "| Certified Results | ${{ steps.lookup.outputs.verified }} / ${{ steps.lookup.outputs.total }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Verus Version | ${{ steps.lookup.outputs.verus_version }} |" >> $GITHUB_STEP_SUMMARY
           
+          PROOF_BUNDLE="${{ steps.lookup.outputs.proof_bundle }}"
+          if [ -n "$PROOF_BUNDLE" ]; then
+            echo "| Proof Bundle | \`$PROOF_BUNDLE\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           ETHERSCAN_URL="${{ steps.verify-onchain.outputs.etherscan_url }}"
           if [ -n "$ETHERSCAN_URL" ]; then
             echo "| Transaction | [View on Etherscan]($ETHERSCAN_URL) |" >> $GITHUB_STEP_SUMMARY
@@ -478,9 +591,17 @@ jobs:
           
           # Merkle structure check (only for newer certifications with specs)
           if [ -n "$MERKLE_VERIFIED" ]; then
+            PROOFS_HASH="${{ steps.lookup.outputs.proofs_hash }}"
             if [ "$MERKLE_VERIFIED" = "true" ]; then
-              echo "- ✅ **Merkle Structure**: results_hash + specs_hash → content_hash verified" >> $GITHUB_STEP_SUMMARY
+              if [ -n "$PROOFS_HASH" ]; then
+                echo "- ✅ **Merkle Structure**: results_hash + specs_hash + proofs_hash → content_hash verified" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ✅ **Merkle Structure**: results_hash + specs_hash → content_hash verified" >> $GITHUB_STEP_SUMMARY
+              fi
               echo "  - Specs hash: \`${{ steps.lookup.outputs.specs_hash }}\`" >> $GITHUB_STEP_SUMMARY
+              if [ -n "$PROOFS_HASH" ]; then
+                echo "  - Proofs hash: \`$PROOFS_HASH\`" >> $GITHUB_STEP_SUMMARY
+              fi
             else
               echo "- ❌ **Merkle Structure**: Hash mismatch in Merkle tree!" >> $GITHUB_STEP_SUMMARY
             fi
@@ -490,6 +611,19 @@ jobs:
           TAXONOMY_SUMMARY="${{ steps.taxonomy.outputs.taxonomy_summary }}"
           if [ -n "$TAXONOMY_SUMMARY" ]; then
             echo "- **Spec Taxonomy**: $TAXONOMY_SUMMARY" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Proof bundle check
+          PROOFS_VERIFIED="${{ steps.verify-proofs.outputs.proofs_verified }}"
+          if [ -n "$PROOFS_VERIFIED" ]; then
+            PROOF_FUNCS="${{ steps.verify-proofs.outputs.total_functions }}"
+            PROOF_FORMULAS="${{ steps.verify-proofs.outputs.formulas }}"
+            PROOF_PROOFS="${{ steps.verify-proofs.outputs.proofs }}"
+            if [ "$PROOFS_VERIFIED" = "true" ]; then
+              echo "- ✅ **Proof Bundle**: $PROOF_FUNCS functions — $PROOF_FORMULAS Z3 formulas, $PROOF_PROOFS Z3 proofs" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ❌ **Proof Bundle**: Integrity check failed (missing files)" >> $GITHUB_STEP_SUMMARY
+            fi
           fi
           
           # On-chain check
