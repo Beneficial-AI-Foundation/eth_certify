@@ -1,0 +1,853 @@
+{
+  "probe:pmemlog/0.1.0/logimpl_v/bytes_to_header()": {
+    "verus_spec": {
+      "mode": "exec",
+      "requires_text": "requires\n            bytes@.len() == header_size",
+      "ensures_text": "ensures\n            out == spec_bytes_to_header(bytes@)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.bytes_to_header._01.smt2",
+      "hash": "0xb38c0eab628b5b9492b0ef902fbad58bf05d24ff4ea9818edaa6864df90fa56f",
+      "size_bytes": 318160
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::bytes_to_header"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/bytes_to_metadata()": {
+    "verus_spec": {
+      "mode": "exec",
+      "requires_text": "requires\n            bytes@.len() == header_size - 8",
+      "ensures_text": "ensures\n            out == spec_bytes_to_metadata(bytes@)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.bytes_to_metadata._01.smt2",
+      "hash": "0xe1c22003554ac1deed5563971b77f4fb131c4fc41cbc1253604acb1b6d1b584a",
+      "size_bytes": 323340
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::bytes_to_metadata"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/crc_and_metadata_bytes_to_header()": {
+    "verus_spec": {
+      "mode": "exec",
+      "requires_text": "requires\n            crc_bytes@.len() == 8,\n            header_bytes@.len() == header_size - 8",
+      "ensures_text": "ensures\n            out.crc == spec_u64_from_le_bytes(crc_bytes@),\n            out.metadata == spec_bytes_to_metadata(header_bytes@)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.crc_and_metadata_bytes_to_header._01.smt2",
+      "hash": "0x47da71d232ce8f8ca6be15df6b698cb7812188eb2cab177debab8317c2be1aad",
+      "size_bytes": 332903
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::crc_and_metadata_bytes_to_header"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/header_to_bytes()": {
+    "verus_spec": {
+      "mode": "exec",
+      "ensures_text": "ensures\n            header == spec_bytes_to_header(out@),\n            spec_u64_from_le_bytes(out@.subrange(header_crc_offset as int, header_crc_offset + 8)) == header.crc,\n            spec_bytes_to_metadata(out@.subrange(header_head_offset as int, header_size as int)) == header.metadata,\n            out@.len() == header_size"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.header_to_bytes._01.smt2",
+      "hash": "0xf114237bdae036a1058c8bd6978fded2500fb43e8d51ae64814fa8ca3cdaaed1",
+      "size_bytes": 325406
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::header_to_bytes"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_data_update_view()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            pm.len() > contents_offset,\n            contents_offset <= write_addr < pm.len(),\n            ({\n                // write must be a valid write and not overlap the live log\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                &&& physical_head <= physical_tail ==> {\n                        &&& write_addr + new_bytes.len() <= live_header.metadata.log_size + contents_offset\n                        &&& write_addr < physical_head ==> write_addr + new_bytes.len() <= physical_head\n                        &&& (physical_tail <= write_addr || write_addr < physical_head)\n                }\n                &&& physical_tail < physical_head ==> {\n                        &&& physical_tail <= write_addr <= write_addr + new_bytes.len() < physical_head\n                }\n            }),",
+      "ensures_text": "ensures\n            UntrustedLogImpl::recover(pm) is Some,\n            update_data_view_postcond(pm, new_bytes, write_addr),"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_append_data_update_view._01.smt2",
+      "hash": "0x9e81896b030fd0e7974673a6b932171849f38e2db0c8c7d36bbd7826fa3863e6",
+      "size_bytes": 352463
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_append_data_update_view"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_data_update_view_crash()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            pm.len() > contents_offset,\n            contents_offset <= write_addr < pm.len(),\n            ({\n                // write must be a valid write and not overlap the live log\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                &&& physical_head <= physical_tail ==> write_addr + new_bytes.len() <= live_header.metadata.log_size + contents_offset\n                &&& physical_tail < physical_head ==> write_addr + new_bytes.len() < physical_head\n            })",
+      "ensures_text": "ensures\n            UntrustedLogImpl::recover(pm) is Some,\n            ({\n                let new_pm = update_contents_to_reflect_partially_flushed_write(pm, write_addr, new_bytes, chunks_flushed);\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == new_ib\n                &&& old_headers == new_headers\n                &&& new_data.len() == old_data.len()\n                &&& new_data.subrange(0, write_addr - contents_offset) =~= old_data.subrange(0, write_addr - contents_offset)\n                &&& new_data.subrange(write_addr - contents_offset + new_bytes.len(), new_data.len() as int) =~=\n                        old_data.subrange(write_addr - contents_offset + new_bytes.len(), old_data.len() as int)\n                &&& UntrustedLogImpl::recover(new_pm) is Some\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_append_data_update_view_crash._01.smt2",
+      "hash": "0xf67a08185e17c2c0f40d09e65af7c853e41d8d195c6d33d1329ff2d5692e5104",
+      "size_bytes": 364675
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_append_data_update_view_crash"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_ib_update()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            pm.len() > contents_offset,\n            UntrustedLogImpl::recover(pm) is Some,\n            new_ib == cdb0_val || new_ib == cdb1_val,\n            new_ib == cdb0_val ==>\n                pm.subrange(header1_pos as int, header1_pos + header_size) == new_header_bytes,\n            new_ib == cdb1_val ==>\n                pm.subrange(header2_pos as int, header2_pos + header_size) == new_header_bytes,\n            new_header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) ==\n                spec_crc_bytes(new_header_bytes.subrange(header_head_offset as int, header_size as int)),\n            ({\n                let new_header = spec_bytes_to_header(new_header_bytes);\n                let live_header = spec_get_live_header(pm);\n                &&& new_header.metadata.tail == live_header.metadata.tail + bytes_to_append.len()\n                &&& new_header.metadata.head == live_header.metadata.head\n                &&& new_header.metadata.log_size == live_header.metadata.log_size\n                &&& new_header.metadata.tail - new_header.metadata.head < new_header.metadata.log_size\n            }),\n            perm.check_permission(pm),\n            permissions_depend_only_on_recovery_view(perm),\n            ({\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                let contents_end = (live_header.metadata.log_size + contents_offset) as int;\n                let append_size = bytes_to_append.len();\n                let len1 = (contents_end - physical_tail);\n                let len2 = bytes_to_append.len() - len1;\n\n                &&& physical_tail + append_size >= contents_end ==> {\n                    &&& pm.subrange(physical_tail, contents_end) =~= bytes_to_append.subrange(0, len1)\n                    &&& pm.subrange(contents_offset as int, contents_offset + len2) =~= bytes_to_append.subrange(len1 as int, append_size as int)\n                    &&& bytes_to_append =~= pm.subrange(physical_tail, contents_end) + pm.subrange(contents_offset as int, contents_offset + len2)\n                }\n                &&& physical_head <= physical_tail && physical_tail + append_size < contents_end ==> {\n                    pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n                &&& physical_tail < physical_head ==> {\n                    &&& physical_tail + append_size < physical_head\n                    &&& pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n            }),\n            ({\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                forall |pm_state| #[trigger] perm.check_permission(pm_state) <==> {\n                    let log_state = UntrustedLogImpl::recover(pm_state);\n                    log_state == old_log_state || log_state == Some(old_log_state.unwrap().append(bytes_to_append))\n                }\n            }),",
+      "ensures_text": "ensures\n            ({\n                let ib_bytes = spec_u64_to_le_bytes(new_ib);\n                let new_pm = update_contents_to_reflect_write(pm, incorruptible_bool_pos as int, ib_bytes);\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                let new_log_state = UntrustedLogImpl::recover(new_pm);\n                let new_live_header = spec_get_live_header(new_pm);\n                let (new_pm_ib, _, _) = pm_to_views(new_pm);\n                &&& match (old_log_state, new_log_state) {\n                        (Some(old_log_state), Some(new_log_state)) => {\n                            &&& new_log_state =~= old_log_state.append(bytes_to_append)\n                            &&& perm.check_permission(new_pm)\n                        }\n                        _ => false,\n                    }\n                &&& new_live_header == spec_bytes_to_header(new_header_bytes)\n                &&& new_ib == new_pm_ib\n            }),\n            forall |chunks_flushed| {\n                let new_pm = #[trigger] update_contents_to_reflect_partially_flushed_write(\n                    pm, incorruptible_bool_pos as int, spec_u64_to_le_bytes(new_ib), chunks_flushed);\n                &&& perm.check_permission(new_pm)\n            },"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_append_ib_update._01.smt2",
+      "hash": "0x9fb7099b3d077ea1574266347ac28a21e84c2859b42be66b4aba21af476b7f0c",
+      "size_bytes": 445395
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_append_ib_update"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_append_ib_update_effect_on_committed()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            pm.len() > contents_offset,\n            UntrustedLogImpl::recover(pm) is Some,\n            new_ib == cdb0_val || new_ib == cdb1_val,\n            new_ib == cdb0_val ==>\n                pm.subrange(header1_pos as int, header1_pos + header_size) == new_header_bytes,\n            new_ib == cdb1_val ==>\n                pm.subrange(header2_pos as int, header2_pos + header_size) == new_header_bytes,\n            new_header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) ==\n                spec_crc_bytes(new_header_bytes.subrange(header_head_offset as int, header_size as int)),\n            ({\n                let new_header = spec_bytes_to_header(new_header_bytes);\n                let live_header = spec_get_live_header(pm);\n                &&& new_header.metadata.tail == live_header.metadata.tail + bytes_to_append.len()\n                &&& new_header.metadata.head == live_header.metadata.head\n                &&& new_header.metadata.log_size == live_header.metadata.log_size\n                &&& new_header.metadata.tail - new_header.metadata.head < new_header.metadata.log_size\n            }),\n            perm.check_permission(pm),\n            permissions_depend_only_on_recovery_view(perm),\n            ({\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                let contents_end = (live_header.metadata.log_size + contents_offset) as int;\n                let append_size = bytes_to_append.len();\n                let len1 = (contents_end - physical_tail);\n                let len2 = bytes_to_append.len() - len1;\n\n                &&& physical_tail + append_size >= contents_end ==> {\n                    &&& pm.subrange(physical_tail, contents_end) =~= bytes_to_append.subrange(0, len1)\n                    &&& pm.subrange(contents_offset as int, contents_offset + len2) =~= bytes_to_append.subrange(len1 as int, append_size as int)\n                    &&& bytes_to_append =~= pm.subrange(physical_tail, contents_end) + pm.subrange(contents_offset as int, contents_offset + len2)\n                }\n                &&& physical_head <= physical_tail && physical_tail + append_size < contents_end ==> {\n                    pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n                &&& physical_tail < physical_head ==> {\n                    &&& physical_tail + append_size < physical_head\n                    &&& pm.subrange(physical_tail, physical_tail + append_size) =~= bytes_to_append\n                }\n            }),\n            ({\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                forall |pm_state| #[trigger] perm.check_permission(pm_state) <==> {\n                    let log_state = UntrustedLogImpl::recover(pm_state);\n                    log_state == old_log_state || log_state == Some(old_log_state.unwrap().append(bytes_to_append))\n                }\n            }),",
+      "ensures_text": "ensures\n            ({\n                let ib_bytes = spec_u64_to_le_bytes(new_ib);\n                let new_pm = update_contents_to_reflect_write(pm, incorruptible_bool_pos as int, ib_bytes);\n                let old_log_state = UntrustedLogImpl::recover(pm);\n                let new_log_state = UntrustedLogImpl::recover(new_pm);\n                let new_live_header = spec_get_live_header(new_pm);\n                let (new_pm_ib, _, _) = pm_to_views(new_pm);\n                &&& match (old_log_state, new_log_state) {\n                        (Some(old_log_state), Some(new_log_state)) => {\n                            &&& new_log_state =~= old_log_state.append(bytes_to_append)\n                            &&& perm.check_permission(new_pm)\n                        }\n                        _ => false,\n                    }\n                &&& new_live_header == spec_bytes_to_header(new_header_bytes)\n                &&& new_ib == new_pm_ib\n            }),"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_append_ib_update_effect_on_committed._01.smt2",
+      "hash": "0x06452716db4b0bb2dd0ea2c0e0500834dee841c4f05c2a1418350d6a1d05c95a",
+      "size_bytes": 462268
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_append_ib_update_effect_on_committed"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_bytes_combine_into_header()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            crc_bytes.len() == 8,\n            metadata_bytes.len() == header_size - 8,\n            spec_bytes_to_header((crc_bytes + metadata_bytes)) == header,",
+      "ensures_text": "ensures\n            ({\n                let combined_header = PersistentHeader { crc: spec_u64_from_le_bytes(crc_bytes), metadata: spec_bytes_to_metadata(metadata_bytes) };\n                header == combined_header\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_bytes_combine_into_header._01.smt2",
+      "hash": "0x1937c0290f7c7e4d8956746fe2bfec7b39f3d981e7944823cc0e684957a97507",
+      "size_bytes": 307735
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_bytes_combine_into_header"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_data_write_is_safe()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            pm.len() > contents_offset,\n            contents_offset <= write_addr < pm.len(),\n            perm.check_permission(pm),\n            permissions_depend_only_on_recovery_view(perm),\n            ({\n                // write must be a valid write and not overlap the live log\n                let live_header = spec_get_live_header(pm);\n                let physical_head = spec_addr_logical_to_physical(live_header.metadata.head as int, live_header.metadata.log_size as int);\n                let physical_tail = spec_addr_logical_to_physical(live_header.metadata.tail as int, live_header.metadata.log_size as int);\n                &&& physical_head <= physical_tail ==> {\n                    &&& write_addr + bytes.len() <= live_header.metadata.log_size + contents_offset\n                    &&& write_addr < physical_head ==> write_addr + bytes.len() <= physical_head\n                    &&& (physical_tail <= write_addr || write_addr < physical_head)\n                }\n                &&& physical_tail < physical_head ==> {\n                    &&& physical_tail <= write_addr <= write_addr + bytes.len() < physical_head\n                }\n            }),",
+      "ensures_text": "ensures\n            UntrustedLogImpl::recover(pm) is Some,\n            forall |chunks_flushed| {\n                let new_pm = #[trigger] update_contents_to_reflect_partially_flushed_write(\n                    pm, write_addr, bytes, chunks_flushed);\n                perm.check_permission(new_pm)\n            },\n            ({\n                let new_pm = update_contents_to_reflect_write(pm, write_addr, bytes);\n                perm.check_permission(new_pm)\n            }),\n            update_data_view_postcond(pm, bytes, write_addr),"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_data_write_is_safe._01.smt2",
+      "hash": "0xb8a3179f7d20ddd12fcf21fe263a235f8d7a9fb3ffc84a005d7fc248de81c0e7",
+      "size_bytes": 370724
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_data_write_is_safe"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_correct()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            pm.len() > contents_offset,\n            header_bytes.len() == header_size,\n            header_pos == header1_pos || header_pos == header2_pos,\n            header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) =~=\n                spec_crc_bytes(header_bytes.subrange(header_head_offset as int, header_size as int)),\n            pm.subrange(header_pos, header_pos + header_size) =~= header_bytes",
+      "ensures_text": "ensures\n            pm.subrange(header_pos + header_crc_offset, header_pos + header_crc_offset + 8) =~=\n                header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8),\n            pm.subrange(header_pos + header_head_offset, header_pos + header_size) =~=\n                header_bytes.subrange(header_head_offset as int, header_size as int),\n            pm.subrange(header_pos + header_crc_offset, header_pos + header_crc_offset + 8) =~=\n                spec_crc_bytes(pm.subrange(header_pos + header_head_offset, header_pos + header_size))"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_header_correct._01.smt2",
+      "hash": "0x4594027a0ba9a902ac4d5f7864fe74d9973a8dc987af97b0b2ef05f313e2bd4a",
+      "size_bytes": 380843
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_header_correct"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_crc_correct()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            header_bytes.len() == header_size,\n            crc_bytes.len() == 8,\n            metadata_bytes.len() == header_size - 8,\n            crc_bytes =~= spec_crc_bytes(metadata_bytes),\n            header_bytes =~= crc_bytes + metadata_bytes",
+      "ensures_text": "ensures\n            header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) =~= crc_bytes,\n            header_bytes.subrange(header_head_offset as int, header_size as int) =~= metadata_bytes,\n            header_bytes.subrange(header_crc_offset as int, header_crc_offset + 8) =~=\n                spec_crc_bytes(header_bytes.subrange(header_head_offset as int, header_size as int))"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_header_crc_correct._01.smt2",
+      "hash": "0xf89119410590387caa0cfaf144fb499b4dffb46b541c0df7bbc1ba58e08c46c3",
+      "size_bytes": 434086
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_header_crc_correct"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_match()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            pm.len() > contents_offset,\n            header_pos == header1_pos || header_pos == header2_pos,\n            spec_bytes_to_header(pm.subrange(header_pos as int, header_pos + header_size)) == header,",
+      "ensures_text": "ensures\n            ({\n                let (_, headers, _) = pm_to_views(pm);\n                &&& header_pos == header1_pos ==>\n                        headers.header1 == header\n                &&& header_pos == header2_pos ==>\n                        headers.header2 == header\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_header_match._01.smt2",
+      "hash": "0xc8cdff97e700dd3391761c309485e1dd842ce20414818ca04e15f20f029e776a",
+      "size_bytes": 310142
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_header_match"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_header_split_into_bytes()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            crc_bytes.len() == 8,\n            metadata_bytes.len() == header_size - 8,\n            header_bytes.len() == header_size,\n            ({\n                let header = PersistentHeader { crc: spec_u64_from_le_bytes(crc_bytes), metadata: spec_bytes_to_metadata(metadata_bytes) };\n                spec_bytes_to_header(header_bytes) == header\n            }),",
+      "ensures_text": "ensures\n            crc_bytes + metadata_bytes =~= header_bytes"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_header_split_into_bytes._01.smt2",
+      "hash": "0x2ac791b2f05c9f19d134bf7b4727afe5f2efeb25dd152182f0bd1d45d6a025d3",
+      "size_bytes": 319009
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_header_split_into_bytes"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_headers_unchanged()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            old_pm.len() == new_pm.len(),\n            old_pm.len() >= contents_offset,\n            old_pm.subrange(header1_pos as int, header1_pos + header_size) =~= new_pm.subrange(header1_pos as int, header1_pos + header_size),\n            old_pm.subrange(header2_pos as int, header2_pos + header_size) =~= new_pm.subrange(header2_pos as int, header2_pos + header_size),",
+      "ensures_text": "ensures\n            ({\n                let (_, old_headers, _) = pm_to_views(old_pm);\n                let (_, new_headers, _) = pm_to_views(new_pm);\n                old_headers == new_headers\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_headers_unchanged._01.smt2",
+      "hash": "0xbb37252afc7189dc46665bded051d515422838c4bf2995398e032424f0b9997e",
+      "size_bytes": 333493
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_headers_unchanged"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_inactive_header_update_view()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            header_pos == header1_pos || header_pos == header2_pos,\n            ({\n                // the new bytes must be written to the inactive header\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                &&& old_ib == cdb0_val ==> header_pos == header2_pos\n                &&& old_ib == cdb1_val ==> header_pos == header1_pos\n            }),\n            new_header_bytes.len() == header_size,\n            pm.len() > contents_offset,",
+      "ensures_text": "ensures\n            ({\n                let new_pm = update_contents_to_reflect_write(pm, header_pos, new_header_bytes);\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == new_ib\n                &&& old_data =~= old_data\n                &&& header_pos == header1_pos ==>\n                    old_headers.header2 == new_headers.header2\n                &&& header_pos == header2_pos ==>\n                    old_headers.header1 == new_headers.header1\n                &&& UntrustedLogImpl::recover(new_pm) is Some\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_inactive_header_update_view._01.smt2",
+      "hash": "0x59f2b1541044aa6131754231fe49082342a21ba87105d2e995de1bdd1164ab1d",
+      "size_bytes": 376926
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_inactive_header_update_view"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_inactive_header_update_view_crash()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            header_pos == header1_pos || header_pos == header2_pos,\n            ({\n                // the new bytes must be written to the inactive header\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                &&& old_ib == cdb0_val ==> header_pos == header2_pos\n                &&& old_ib == cdb1_val ==> header_pos == header1_pos\n            }),\n            new_header_bytes.len() == header_size,\n            pm.len() > contents_offset,",
+      "ensures_text": "ensures\n            ({\n                let new_pm = update_contents_to_reflect_partially_flushed_write(\n                    pm, header_pos, new_header_bytes, chunks_flushed);\n                let (old_ib, old_headers, old_data) = pm_to_views(pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == new_ib\n                &&& old_data =~= old_data\n                &&& header_pos == header1_pos ==>\n                    old_headers.header2 == new_headers.header2\n                &&& header_pos == header2_pos ==>\n                    old_headers.header1 == new_headers.header1\n                &&& UntrustedLogImpl::recover(new_pm) is Some\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_inactive_header_update_view_crash._01.smt2",
+      "hash": "0xb05b8d0c453e9f714c291df76f3e0ae962d64a6d7d9ea5bd41f2851ffaf664a1",
+      "size_bytes": 381904
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_inactive_header_update_view_crash"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_incorruptible_bool_unchanged()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            old_pm.len() == new_pm.len(),\n            old_pm.len() >= contents_offset,\n            old_pm.subrange(incorruptible_bool_pos as int, incorruptible_bool_pos + 8) =~= new_pm.subrange(incorruptible_bool_pos as int, incorruptible_bool_pos + 8)",
+      "ensures_text": "ensures\n            ({\n                let (old_ib, _, _) = pm_to_views(old_pm);\n                let (new_ib, _, _) = pm_to_views(new_pm);\n                old_ib == new_ib\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_incorruptible_bool_unchanged._01.smt2",
+      "hash": "0x86e78f992339e4eb840e5e079239bd6abcdc7d011ee07124408e0156d45f463a",
+      "size_bytes": 335293
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_incorruptible_bool_unchanged"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_metadata_bytes_eq()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            bytes1.len() == header_size - 8,\n            bytes2.len() == header_size - 8,\n            metadata == spec_bytes_to_metadata(bytes1),\n            metadata == spec_bytes_to_metadata(bytes2),",
+      "ensures_text": "ensures\n            bytes1 =~= bytes2"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_metadata_bytes_eq._01.smt2",
+      "hash": "0x6437fb2829ccd0f94afa046653be975b1954fbf6a49d35ef30ca16423dee6e83",
+      "size_bytes": 325007
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_metadata_bytes_eq"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_pm_state_header()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            UntrustedLogImpl::recover(pm) is Some,\n            ({\n                let header = spec_get_live_header(pm);\n                header.metadata.tail - header.metadata.head < header.metadata.log_size\n            })",
+      "ensures_text": "ensures\n            ({\n                let pm_state = UntrustedLogImpl::recover(pm);\n                let header = spec_get_live_header(pm);\n                match pm_state {\n                    Some(pm_state) => {\n                        &&& header.metadata.head == pm_state.head\n                        &&& pm_state.log.len() == header.metadata.tail - header.metadata.head\n                    }\n                    None => false\n                }\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_pm_state_header._01.smt2",
+      "hash": "0x3fa15a23be2f44251bf35ab3bad9545b615c7971f49ad582a1a5cb85de29378f",
+      "size_bytes": 397691
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_pm_state_header"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_same_log_state()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            UntrustedLogImpl::recover(old_pm) is Some,\n            UntrustedLogImpl::recover(new_pm) is Some,\n            live_data_view_eq(old_pm, new_pm),\n            ({\n                let (old_ib, old_headers, old_data) = pm_to_views(old_pm);\n                let (new_ib, new_headers, new_data) = pm_to_views(new_pm);\n                &&& old_ib == cdb0_val || old_ib == cdb1_val\n                &&& old_ib == new_ib\n                &&& old_ib == cdb0_val ==> {\n                    &&& old_headers.header1 == new_headers.header1\n                }\n                &&& old_ib == cdb1_val ==> {\n                    &&& old_headers.header2 == new_headers.header2\n                }\n            })",
+      "ensures_text": "ensures\n            UntrustedLogImpl::recover(old_pm) =~=\n                UntrustedLogImpl::recover(new_pm)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_same_log_state._01.smt2",
+      "hash": "0x0c4b296de8a6e8fac78a4e26b8581fee54a71739b6bc2c8a5d785bb899c4eea2",
+      "size_bytes": 373024
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_same_log_state"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_same_permissions()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            recovery_view()(pm1) =~= recovery_view()(pm2),\n            perm.check_permission(pm1),\n            permissions_depend_only_on_recovery_view(perm)",
+      "ensures_text": "ensures\n            perm.check_permission(pm2)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_same_permissions._01.smt2",
+      "hash": "0xdf4519b7b7d58d896bf0881cca7279f6de9408b90449a2a9cd7aff607232b8ed",
+      "size_bytes": 300634
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_same_permissions"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_seq_addition()": {
+    "verus_spec": {
+      "mode": "proof",
+      "ensures_text": "ensures\n            ({\n                let i = bytes1.len() as int;\n                let j = bytes2.len() as int;\n                &&& (bytes1 + bytes2).subrange(0, i) =~= bytes1\n                &&& (bytes1 + bytes2).subrange(i, i + j) =~= bytes2\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_seq_addition._01.smt2",
+      "hash": "0x001fb3da63a8939a66933afe565bea29e961a4a14b639abeb1ba0b0435a1eda3",
+      "size_bytes": 304008
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_seq_addition"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_single_write_crash()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            bytes_to_write.len() == persistence_chunk_size,\n            write_addr % persistence_chunk_size == 0, // currently seems to succeed without nonlinear arith\n            0 <= write_addr < pm.len(),\n            write_addr + bytes_to_write.len() <= pm.len()",
+      "ensures_text": "ensures\n            ({\n                forall |chunks_flushed: Set<int>| {\n                    let new_crash_contents = #[trigger] update_contents_to_reflect_partially_flushed_write(\n                        pm, write_addr, bytes_to_write, chunks_flushed);\n                    let new_contents = update_contents_to_reflect_write(pm, write_addr, bytes_to_write);\n                    new_crash_contents =~= pm || new_crash_contents =~= new_contents\n                }\n            })"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_single_write_crash._01.smt2",
+      "hash": "0x72d540ed40675ef4467fbdae91cb5574ccb2529f788879d87572ef139192cec6",
+      "size_bytes": 409399
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_single_write_crash"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_eq()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            bytes1 =~= bytes2",
+      "ensures_text": "ensures\n            forall |i: int, j: int| 0 <= i < j < bytes1.len() ==> bytes1.subrange(i, j) =~= bytes2.subrange(i, j)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_subrange_eq._01.smt2",
+      "hash": "0x687edefb27b1c6c921efcdcd43f701a56d58a3a23c8a1f2b71cbb14e26eb4f6f",
+      "size_bytes": 434953
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_subrange_eq"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_index_equality()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            0 <= i <= j <= s1.len(),\n            j <= s2.len(),\n            s1.subrange(i, j) == s2.subrange(i, j)",
+      "ensures_text": "ensures\n            forall |k| i <= k < j ==> s1[k] == s2[k]"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_subrange_equality_implies_index_equality._01.smt2",
+      "hash": "0x5b2b5951699d30fd33dca983d2bd466f49c45601f6284004a64cd12e646d5f16",
+      "size_bytes": 326074
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_subrange_equality_implies_index_equality"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_subsubrange_equality()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            0 <= i <= j <= s1.len(),\n            j <= s2.len(),\n            s1.subrange(i, j) == s2.subrange(i, j)",
+      "ensures_text": "ensures\n            forall |k, m| i <= k <= m <= j ==> s1.subrange(k, m) == s2.subrange(k, m)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_subrange_equality_implies_subsubrange_equality._01.smt2",
+      "hash": "0x5624d76360200f705a9b8cd19d3d931a1150eb6fa33acf98e13af71eb7dca588",
+      "size_bytes": 329800
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_subrange_equality_implies_subsubrange_equality"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_subrange_equality_implies_subsubrange_equality_forall()": {
+    "verus_spec": {
+      "mode": "proof",
+      "ensures_text": "ensures\n            forall |s1: Seq<T>, s2: Seq<T>, i: int, j: int, k: int, m: int|\n                {\n                    &&& 0 <= i <= j <= s1.len()\n                    &&& j <= s2.len()\n                    &&& s1.subrange(i, j) == s2.subrange(i, j)\n                    &&& i <= k <= m <= j\n                }\n                ==> s1.subrange(k, m) == s2.subrange(k, m)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_subrange_equality_implies_subsubrange_equality_forall._01.smt2",
+      "hash": "0xf455309c6c04db9852e261bf432c0346bddb1ad5168f208afec5bdde6ed63c84",
+      "size_bytes": 333931
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_subrange_equality_implies_subsubrange_equality_forall"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/lemma_u64_bytes_eq()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            val1 == val2",
+      "ensures_text": "ensures\n            spec_u64_to_le_bytes(val1) =~= spec_u64_to_le_bytes(val2)"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.lemma_u64_bytes_eq._01.smt2",
+      "hash": "0xf319ae73c43b2dc6bc346a408561b29cfb4c5fc70d119b055c49427f570bc2e3",
+      "size_bytes": 432196
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::lemma_u64_bytes_eq"
+  },
+  "probe:pmemlog/0.1.0/logimpl_v/metadata_to_bytes()": {
+    "verus_spec": {
+      "mode": "exec",
+      "ensures_text": "ensures\n            metadata == spec_bytes_to_metadata(out@),\n            out@.len() == header_size - 8,"
+    },
+    "z3_formula": {
+      "file": "smt_queries/logimpl_vpmemlog!logimpl_v.metadata_to_bytes._01.smt2",
+      "hash": "0xe2391bf1f1707fa4cef21fab09cde14261057ece26a04877bf8b887dd0131366",
+      "size_bytes": 327335
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::logimpl_v::metadata_to_bytes"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_different_order()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x < y,\n            y - x <= d,\n            y % d <= x % d",
+      "ensures_text": "ensures\n            y / d == x / d + 1"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_div_relation_when_mods_have_different_order._01.smt2",
+      "hash": "0x8fa21e88abbe9059316119d0e4e2e614ce14d56a5e55dc8b4a88aeeb7712b092",
+      "size_bytes": 64147
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_div_relation_when_mods_have_different_order"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_different_order_alt()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x <= y,\n            y - x < d,\n            y % d < x % d",
+      "ensures_text": "ensures\n            y / d == x / d + 1"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_div_relation_when_mods_have_different_order_alt._01.smt2",
+      "hash": "0xefa87e0d899ccdc01a2bb7dec003b14f0ddf85b5ea97795391c392bf80bea7cb",
+      "size_bytes": 54871
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_div_relation_when_mods_have_different_order_alt"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_same_order()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x < y,\n            y - x <= d,\n            x % d < y % d",
+      "ensures_text": "ensures\n            y / d == x / d"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_div_relation_when_mods_have_same_order._01.smt2",
+      "hash": "0x6e7ca2428de21e2553bd361dd77e7ac390807071d1daa58be555a8589b97f72c",
+      "size_bytes": 59950
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_div_relation_when_mods_have_same_order"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_div_relation_when_mods_have_same_order_alt()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x <= y,\n            y - x < d,\n            x % d <= y % d",
+      "ensures_text": "ensures\n            y / d == x / d"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_div_relation_when_mods_have_same_order_alt._01.smt2",
+      "hash": "0x4882a5eef061c62d072491c02bf291cd79213808d8a14f5ec5d3db93078bc466",
+      "size_bytes": 50065
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_div_relation_when_mods_have_same_order_alt"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_addition_when_bounded()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            y >= 0,\n            (x % d) + y < d,",
+      "ensures_text": "ensures\n            (x + y) % d == (x % d) + y"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_addition_when_bounded._01.smt2",
+      "hash": "0xaad05ad9bdf2569ecbbb2be047c1dcc088b1ff3fe2cc0ba510816e32cac20a2e",
+      "size_bytes": 62241
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_addition_when_bounded"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_auto_basics()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            n > 0",
+      "ensures_text": "ensures\n            (x + n) % n == x % n,\n            (x - n) % n == x % n,\n            (x + n) / n == x / n + 1,\n            (x - n) / n == x / n - 1,\n            0 <= x < n <==> x % n == x,"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_auto_basics._01.smt2",
+      "hash": "0x86c511f3f94b5b7382b62217ec458f65a783193c5a4f92f51defce911c372a88",
+      "size_bytes": 67407
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_auto_basics"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_between()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x % d < y % d,\n            y - x <= d,\n            x <= z <= y",
+      "ensures_text": "ensures\n            x % d <= z % d <= y % d"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_between._01.smt2",
+      "hash": "0xaef4748fbec4b5694fff9501e35fb4b85f08b28870debdd2680a113ebcb0691a",
+      "size_bytes": 62314
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_between"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_difference_equal()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x <= y,\n            x % d <= y % d,\n            y - x < d",
+      "ensures_text": "ensures\n            y % d - x % d == y - x"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_difference_equal._01.smt2",
+      "hash": "0x55f1a80befbf811c42f3e52ca33ebe49310f6af377333795bb64b3f24ddb6829",
+      "size_bytes": 50494
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_difference_equal"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_equal()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x <= y,\n            x % d == y % d,\n            y - x < d",
+      "ensures_text": "ensures\n            x == y"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_equal._01.smt2",
+      "hash": "0xf1fa8f998e6ada52fd9c97bd426f5cae6a4743d76a7bc0ab35c1ecc0b14c65ac",
+      "size_bytes": 52147
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_equal"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_equal_converse()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires \n            d > 0,\n            x == y,",
+      "ensures_text": "ensures \n            x % d == y % d"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_equal_converse._01.smt2",
+      "hash": "0xc126806e3942888a847304fda3ef60d157030651c5ec18688308286fed5a4d91",
+      "size_bytes": 62326
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_equal_converse"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_not_between()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            y % d < x % d,\n            y - x <= d,\n            x <= z <= y",
+      "ensures_text": "ensures\n            z % d <= y % d || z % d >= x % d"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_not_between._01.smt2",
+      "hash": "0x43732f204bf1ec981fd9d254cbabc794ef54082435498a6df3fe4d69ef6d8407",
+      "size_bytes": 65824
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_not_between"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_not_equal()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires \n            d > 0,\n            y - x < d,\n            y - x >= 0,\n            x != y,",
+      "ensures_text": "ensures \n            x % d != y % d"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_not_equal._01.smt2",
+      "hash": "0x8802fd3ea84ae566dc9aaa29e8d05466291471de2d1af4b01f2471847d192be9",
+      "size_bytes": 65065
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_not_equal"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_subtract()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            (x % d) + y >= d,\n            0 <= y < d",
+      "ensures_text": "ensures\n            (x % d) + y - d == (x + y) % d"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_subtract._01.smt2",
+      "hash": "0x53fa545d440911270c7557da943d563827499b4bfb68256d061ea120d30b2a46",
+      "size_bytes": 70677
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_subtract"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mod_wrapped_len()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            d > 0,\n            x <= y,\n            x % d > y % d,\n            y - x < d",
+      "ensures_text": "ensures\n            d - (x % d) + (y % d) == y - x"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mod_wrapped_len._01.smt2",
+      "hash": "0x7a16e1711ea016b7cc686b5df253c03e10ddfdf11a4f41d9614b42dba7869672",
+      "size_bytes": 50730
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mod_wrapped_len"
+  },
+  "probe:pmemlog/0.1.0/math_v/lemma_mul_div_equal()": {
+    "verus_spec": {
+      "mode": "proof",
+      "requires_text": "requires\n            q * d <= x < (q + 1) * d",
+      "ensures_text": "ensures\n            (x / d) == q"
+    },
+    "z3_formula": {
+      "file": "smt_queries/math_vpmemlog!math_v.lemma_mul_div_equal._01.smt2",
+      "hash": "0x1fd5f120e01d418d2cc47e5e7cb21a88f07941d5ed46c12938c4ea0d1bbd431f",
+      "size_bytes": 64873
+    },
+    "z3_proof": {
+      "error": "[Errno 2] No such file or directory: 'z3'",
+      "time_ms": 0,
+      "z3_result": "error"
+    },
+    "verification_result": "unsat",
+    "verus_function_name": "pmemlog::math_v::lemma_mul_div_equal"
+  }
+}
