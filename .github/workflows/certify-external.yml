@@ -95,6 +95,24 @@ jobs:
           echo "Commit SHA: $COMMIT_SHA"
 
       # ═══════════════════════════════════════════════════════════════
+      # Common tooling (needed by both proof generation and certify)
+      # ═══════════════════════════════════════════════════════════════
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install certify dependencies
+        working-directory: certify
+        run: uv sync
+
+      # ═══════════════════════════════════════════════════════════════
       # STEP 1: Run Verus Verification + Spec Extraction
       # ═══════════════════════════════════════════════════════════════
       - name: Run Verus verification (with SMT logging)
@@ -277,16 +295,6 @@ jobs:
           # fi
           
           cat certify.conf
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Install certify dependencies
-        working-directory: certify
-        run: uv sync
 
       - name: Certify on ${{ inputs.network }}
         id: certify
