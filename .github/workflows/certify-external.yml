@@ -216,6 +216,14 @@ jobs:
             exit 0
           fi
           
+          # Locate the Z3 binary bundled with Verus
+          Z3_BIN="$HOME/.cargo/bin/verus-x86-linux/z3"
+          if [ ! -x "$Z3_BIN" ]; then
+            # Fallback: try system z3
+            Z3_BIN="z3"
+          fi
+          echo "Using Z3: $Z3_BIN"
+          
           # Build command -- produces a self-contained bundle directory:
           #   proof-bundle/proofs.json       (the index)
           #   proof-bundle/smt_queries/*.smt2 (the Z3 formulas)
@@ -224,7 +232,7 @@ jobs:
           CMD="$CMD --smt-log-dir $SMT_LOG_DIR"
           CMD="$CMD --results-file $RESULTS_FILE"
           CMD="$CMD --output-dir $PROOF_BUNDLE_DIR"
-          CMD="$CMD --z3-binary z3"
+          CMD="$CMD --z3-binary $Z3_BIN"
           CMD="$CMD --timeout 300"
           
           if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
