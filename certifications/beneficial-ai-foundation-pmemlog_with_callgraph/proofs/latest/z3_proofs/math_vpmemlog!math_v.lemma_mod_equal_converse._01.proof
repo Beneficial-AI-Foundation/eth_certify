@@ -1,0 +1,18 @@
+(:max-memory   21.07
+ :memory       21.07
+ :num-allocs   568196
+ :rlimit-count 2713)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x8883 (EucMod y! d!)))
+ (let ((?x8882 (EucMod x! d!)))
+ (let (($x8884 (= ?x8882 ?x8883)))
+ (let (($x8879 (= x! y!)))
+ (let ((@x8880 (asserted $x8879)))
+ (let (($x8894 (not $x8884)))
+ (let (($x8892 (not (or (not %%location_label%%0) $x8884))))
+ (let ((@x8890 (mp (asserted (not (=> %%location_label%%0 $x8884))) (rewrite (= (not (=> %%location_label%%0 $x8884)) $x8892)) $x8892)))
+ (let ((@x8896 (not-or-elim @x8890 $x8894)))
+ (unit-resolution @x8896 (monotonicity @x8880 $x8884) false))))))))))))
+
