@@ -10,11 +10,10 @@ This moves toward a Rocq-like proof certificate model where the evidence
 
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -51,11 +50,7 @@ def extract_function_def(smt2_path: Path) -> Optional[str]:
 
 def list_spinoff_smt2_files(log_dir: Path) -> list[Path]:
     """List per-function spinoff .smt2 files (excluding module-level files)."""
-    return sorted(
-        p
-        for p in log_dir.glob("*.smt2")
-        if _SPINOFF_SUFFIX.search(p.name)
-    )
+    return sorted(p for p in log_dir.glob("*.smt2") if _SPINOFF_SUFFIX.search(p.name))
 
 
 def list_all_smt2_files(log_dir: Path) -> list[Path]:
@@ -66,6 +61,7 @@ def list_all_smt2_files(log_dir: Path) -> list[Path]:
 # ---------------------------------------------------------------------------
 # Function-name normalisation for matching
 # ---------------------------------------------------------------------------
+
 
 def normalise_verus_name(verus_name: str) -> str:
     """Normalise a Verus fully-qualified name for matching.
@@ -190,6 +186,7 @@ def build_function_mapping(
 # ---------------------------------------------------------------------------
 # Z3 proof generation
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Z3ProofResult:
@@ -338,9 +335,7 @@ def generate_all_proofs(
     for smt2_file in smt2_files:
         proof_name = smt2_file.stem + ".proof"
         proof_path = proof_dir / proof_name
-        result = generate_z3_proof(
-            smt2_file, proof_path, z3_binary, timeout_seconds
-        )
+        result = generate_z3_proof(smt2_file, proof_path, z3_binary, timeout_seconds)
         results.append(result)
 
     return results
@@ -349,6 +344,7 @@ def generate_all_proofs(
 # ---------------------------------------------------------------------------
 # Proofs.json assembly
 # ---------------------------------------------------------------------------
+
 
 def file_hash(path: Path) -> str:
     """Compute SHA-256 hash of a file's contents."""
@@ -390,7 +386,11 @@ def build_proofs_json(
     """
     # Load results and specs
     results = json.loads(results_path.read_text())
-    specs = json.loads(specs_path.read_text()) if specs_path and specs_path.exists() else None
+    specs = (
+        json.loads(specs_path.read_text())
+        if specs_path and specs_path.exists()
+        else None
+    )
 
     # Find per-function .smt2 files
     smt2_files = list_spinoff_smt2_files(smt_log_dir)
@@ -415,10 +415,7 @@ def build_proofs_json(
     # Generate Z3 proofs (output directly into the bundle)
     proof_results: dict[str, Z3ProofResult] = {}
     if generate_proofs:
-        mapped_smt2_files = [
-            Path(v["smt2_file"])
-            for v in mapping.values()
-        ]
+        mapped_smt2_files = [Path(v["smt2_file"]) for v in mapping.values()]
         all_proof_results = generate_all_proofs(
             mapped_smt2_files, proofs_dir, z3_binary, timeout_seconds
         )
@@ -509,6 +506,7 @@ def write_proofs_json(proofs: dict, output_dir: Path) -> Path:
 # Summary statistics
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ProofsSummary:
     """Summary of the proofs.json contents."""
@@ -522,7 +520,7 @@ class ProofsSummary:
 
     def print_report(self) -> None:
         """Print a human-readable summary."""
-        print(f"Proof Certificate Summary:")
+        print("Proof Certificate Summary:")
         print(f"  Total functions in results: {self.total_functions}")
         print(f"  Functions matched to .smt2: {self.matched_smt2}")
         print(f"  Z3 proofs generated:        {self.proofs_generated}")

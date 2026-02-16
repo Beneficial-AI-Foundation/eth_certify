@@ -478,8 +478,12 @@ def _handle_generate_proofs(args: argparse.Namespace) -> int:
 
     print(f"\nProof bundle written to {output_dir}/")
     print(f"  proofs.json:    {proofs_path}")
-    print(f"  smt_queries/:   {len([e for e in proofs.values() if e.get('z3_formula')])} files")
-    print(f"  z3_proofs/:     {len([e for e in proofs.values() if e.get('z3_proof', {}).get('file')])} files")
+    print(
+        f"  smt_queries/:   {len([e for e in proofs.values() if e.get('z3_formula')])} files"
+    )
+    print(
+        f"  z3_proofs/:     {len([e for e in proofs.values() if e.get('z3_proof', {}).get('file')])} files"
+    )
     return 0
 
 

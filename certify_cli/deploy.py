@@ -111,9 +111,11 @@ def certify_content(
         print("Computing Merkle content hash...")
         print(f"  Results: {source}")
         print(f"  Specs:   {certify_config.specs_source}")
-        content_hash, results_hash, specs_hash, _proofs_hash = compute_merkle_content_hash(
-            results_source=source,
-            specs_source=certify_config.specs_source,
+        content_hash, results_hash, specs_hash, _proofs_hash = (
+            compute_merkle_content_hash(
+                results_source=source,
+                specs_source=certify_config.specs_source,
+            )
         )
         print(f"  Results hash: {results_hash}")
         print(f"  Specs hash:   {specs_hash}")
