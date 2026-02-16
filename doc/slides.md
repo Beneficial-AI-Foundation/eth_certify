@@ -35,17 +35,17 @@ Record the proof on Ethereum — permanently, publicly, independently verifiable
 # What BAIF Certify Does
 
 ```
-  Source Code        Verification        Spec               On-Chain             Public
-  + Specs            Engine              Extraction         Certification        Badge
-┌─────────────┐   ┌─────────────┐   ┌────────────┐   ┌─────────────┐   ┌─────────────┐
-│  Rust Code  │──▶│   Verus     │──▶│  probe-    │──▶│  Ethereum   │──▶│  Badge      │
-│  + Verus    │   │   + Z3 SMT  │   │  verus     │   │  Event Log  │   │  + History  │
-│  Annotations│   │   Solver    │   │  specify   │   │  (Merkle)   │   │  + Specs    │
-└─────────────┘   └─────────────┘   └────────────┘   └─────────────┘   └─────────────┘
-     Input            Proof           Spec Manifest       Record            Display
+  Source Code        Verification        Spec             Z3 Proof           On-Chain          Public
+  + Specs            Engine              Extraction       Certificates       Certification     Badge
+┌───────────┐   ┌─────────────┐   ┌────────────┐   ┌─────────────┐   ┌────────────┐   ┌───────────┐
+│ Rust Code │──▶│   Verus     │──▶│  probe-    │──▶│  Z3 proof   │──▶│  Ethereum  │──▶│  Badge    │
+│ + Verus   │   │   + Z3 SMT  │   │  verus     │   │  production │   │  Event Log │   │ + History │
+│ Annots    │   │   Solver    │   │  specify   │   │  per func   │   │  (Merkle)  │   │ + Proofs  │
+└───────────┘   └─────────────┘   └────────────┘   └─────────────┘   └────────────┘   └───────────┘
+     Input            Proof         Spec Manifest     Proof Bundle        Record           Display
 ```
 
-Four layers: **verify**, **extract specs**, **certify (Merkle)**, **display**.
+Five layers: **verify**, **extract specs**, **generate Z3 proofs**, **certify (Merkle)**, **display**.
 
 ---
 
@@ -76,23 +76,52 @@ This is the artifact we certify on-chain.
 
 ---
 
+# Layer 1.5: Z3 Proof Certificate Generation
+
+**New:** After verification, we extract per-function Z3 formulas and produce proof terms.
+
+```
+  Verus --log smt -V spinoff-all
+  ──────────────────────────────
+  93 .smt2 files (per-function SMT queries)
+       │
+       ▼
+  certify_cli generate-proofs
+  ───────────────────────────
+  For each function:
+    1. Map probe-verus function ID → .smt2 file
+    2. Inject (set-option :proof true) + (get-proof)
+    3. Run Z3 → produce .proof file
+       │
+       ▼
+  proof-bundle/
+    proofs.json           ← per-function index
+    smt_queries/*.smt2    ← the Z3 formulas (standard SMT-LIB2)
+    z3_proofs/*.proof     ← the Z3 proof terms
+```
+
+**Result:** 45 functions → 45 formulas + 45 proofs (pmemlog, ~5 seconds total)
+
+---
+
 # Layer 2: On-Chain Certification (Merkle Hashing)
 
 The `Certify.sol` smart contract records a **content hash** on Ethereum.
-When specs are available, the hash is a Merkle root of results + specs:
+The hash is a Merkle root of up to three leaves — results, specs, and (when available) Z3 proofs:
 
 ```
-  results.json ──▶ results_hash = keccak256(results.json)  ─┐
-                                                             ├──▶ content_hash = keccak256(results_hash || specs_hash)
-  specs.json   ──▶ specs_hash   = keccak256(specs.json)    ─┘           │
-                                                                         ▼
-                                                                   on-chain event
+  results.json ──▶ results_hash = keccak256(results.json)   ─┐
+                                                             │
+  specs.json   ──▶ specs_hash   = keccak256(specs.json)     ─┼──▶ content_hash = keccak256(r || s [|| p])
+                                                             │           │
+  proofs.json  ──▶ proofs_hash  = keccak256(proofs.json)    ─┘           ▼
+    (optional)                                                     on-chain event
 ```
 
 ```solidity
 function certifyWebsite(
     string calldata url,          // project identifier
-    bytes32 contentHash,          // Merkle root: keccak256(results_hash || specs_hash)
+    bytes32 contentHash,          // Merkle root: keccak256(results_hash || specs_hash [|| proofs_hash])
     string calldata description   // "pmemlog: 72/72 verified"
 ) external {
     emit WebsiteCertified(
@@ -106,29 +135,31 @@ function certifyWebsite(
 ```
 
 **Stateless** — emits events only, no storage, no admin, no upgrades.
-One transaction, one gas cost. Both leaf hashes stored in `history.json`.
+One transaction, one gas cost. All leaf hashes stored in `history.json`.
 
 ---
 
 # Layer 2: What Gets Recorded
 
 ```
-  results.json ──▶ results_hash ─┐
-                                  ├──▶ content_hash ──▶  Ethereum Event
-  specs.json   ──▶ specs_hash   ─┘    (Merkle root)    ┌─────────────────────┐
-                                                        │ contentHash = 0x…   │
-                                                        │ sender      = 0x8EA…│
-                                                        │ block       = 24196…│
+  results.json ──▶ results_hash  ─┐
+                                  │
+  specs.json   ──▶ specs_hash    ─┼──▶ content_hash ──▶  Ethereum Event
+                                  │    (Merkle root)    ┌─────────────────────┐
+  proofs.json  ──▶ proofs_hash   ─┘                     │ contentHash = 0x…   │
+  (+ smt_queries/  (optional)                           │ sender      = 0x8EA…│
+   + z3_proofs/)                                        │ block       = 24196…│
                                                         │ timestamp   = 1737… │
                                                         └─────────────────────┘
 ```
 
 **Anyone can verify (Merkle path):**
-1. Fetch `results.json` and `specs.json` from our repo
-2. Compute `keccak256` of each → compare with `results_hash`, `specs_hash` in history.json
-3. Compute `keccak256(results_hash || specs_hash)` → compare with on-chain `contentHash`
-4. Match → both files are authentic, neither has been tampered with
+1. Fetch `results.json`, `specs.json`, and `proofs.json` from our repo
+2. Compute `keccak256` of each → compare with recorded hashes in `history.json`
+3. Compute `keccak256(results_hash || specs_hash [|| proofs_hash])` → compare with on-chain `contentHash`
+4. Match → all files are authentic, none have been tampered with
 5. Read `specs.json` to judge: are these the properties that matter?
+6. Inspect `proofs.json` → open the `.smt2` and `.proof` files to examine the Z3 evidence
 
 ---
 
@@ -181,24 +212,25 @@ Two main workflows:
 **`certify-external.yml`** — triggered manually with a repo URL, ref, and network.
 
 ```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ Clone repo   │  │ probe-verus  │  │ probe-verus  │  │ certify_cli  │  │ update-      │
-│ at ref       │─▶│ verify       │─▶│ specify      │─▶│ certify      │─▶│ registry     │
-│              │  │              │  │              │  │ (Merkle)     │  │              │
-│ target/      │  │ results.json │  │ specs.json   │  │ --safe       │  │ badge + hist │
-└──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
-                                                              │
-                                                              ▼
-                                                       Ethereum Event
-                                                       tx: 0x09f0ee…
+┌────────────┐ ┌─────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
+│ Clone repo │ │ probe-verus │ │ probe-verus│ │ generate-  │ │ certify_cli│ │ update-    │
+│ at ref     │▶│ verify      │▶│ specify    │▶│ proofs     │▶│ certify    │▶│ registry   │
+│            │ │ +SMT logs   │ │            │ │ (Z3 proof) │ │ (Merkle)   │ │            │
+│ target/    │ │ results.json│ │ specs.json │ │proof-bundle│ │ --safe     │ │badge + hist│
+└────────────┘ └─────────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────┘
+                                                                   │
+                                                                   ▼
+                                                            Ethereum Event
+                                                            tx: 0x09f0ee…
 ```
 
 | Step | What happens | Tool |
 |---|---|---|
-| **Verify** | Install Verus, run `probe-verus verify` → `results.json` | `probe-verus/action@v1` |
+| **Verify** | Install Verus, run `probe-verus verify` with SMT logging → `results.json` + `.smt2` files | `probe-verus/action@v1` |
 | **Specify** | Extract specs from source → `specs.json` | `probe-verus specify` |
-| **Certify** | Merkle hash (results + specs) → sign via Gnosis Safe → submit to Ethereum | `certify_cli certify` |
-| **Registry** | Generate badge, append to `history.json`, archive results + specs | `certify_cli update-registry` |
+| **Proofs** | Map functions to `.smt2`, run Z3 with proof production → proof bundle | `certify_cli generate-proofs` |
+| **Certify** | Merkle hash (results + specs + proofs) → sign via Gnosis Safe → submit to Ethereum | `certify_cli certify` |
+| **Registry** | Generate badge, append to `history.json`, archive results + specs + proof bundle | `certify_cli update-registry` |
 | **Commit** | Push updated certification files to this repo | `git commit && push` |
 
 Single GitHub Actions job — no human intervention after dispatch.
@@ -210,19 +242,20 @@ Single GitHub Actions job — no human intervention after dispatch.
 **`verify.yml`** — triggered manually with a repo URL, commit SHA, and network.
 
 ```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ Lookup cert  │  │ Hash check   │  │ Merkle       │  │ On-chain     │  │ Fresh Verus  │
-│ in registry  │─▶│ stored files │─▶│ structure    │─▶│ event query  │─▶│ re-run       │
-│              │  │ vs hashes    │  │ check        │  │              │  │ & compare    │
-│ history.json │  │ keccak256    │  │ root = hash  │  │ eth_getLogs  │  │ probe-verus  │
-└──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
+│ Lookup cert│ │ Hash check │ │ Merkle     │ │ Proof      │ │ On-chain   │ │ Fresh Verus│
+│ in registry│▶│ stored     │▶│ structure  │▶│ bundle     │▶│ event      │▶│ re-run     │
+│            │ │ files vs   │ │ check      │ │ integrity  │ │ query      │ │ & compare  │
+│history.json│ │ hashes     │ │ 2/3-leaf   │ │ check      │ │ eth_getLogs│ │ probe-verus│
+└────────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────┘
 ```
 
 | Step | What it checks | Catches |
 |---|---|---|
 | **Registry lookup** | Find certification by commit SHA + network | Missing certifications |
-| **Hash verification** | `keccak256(stored file)` = recorded hash? (for both results and specs) | Tampered artifacts |
-| **Merkle check** | `keccak256(results_hash \|\| specs_hash)` = on-chain `contentHash`? | Inconsistent Merkle tree |
+| **Hash verification** | `keccak256(stored file)` = recorded hash? (results, specs) | Tampered artifacts |
+| **Merkle check** | `keccak256(results_hash \|\| specs_hash [\|\| proofs_hash])` = on-chain `contentHash`? | Inconsistent Merkle tree |
+| **Proof bundle** | All `.smt2` and `.proof` files referenced in `proofs.json` exist? | Missing/corrupt proof artifacts |
 | **On-chain check** | Query Ethereum for the certification event | Fake/deleted certifications |
 | **Fresh re-verification** | Re-run Verus, compare verified/total counts | Non-reproducible results |
 
@@ -280,9 +313,10 @@ All contract source code is verified on Etherscan.
 
 **What a BAIF certification proves:**
 - Verus accepted the formal specs — machine-checked mathematical proof
-- The result is cryptographically bound to a Merkle root of results + specs
+- The result is cryptographically bound to a Merkle root of results + specs + Z3 proofs
 - The hash is immutably recorded on Ethereum with a timestamp
 - The actual specs (pre/postconditions) are published and independently inspectable
+- The Z3 formulas and proof terms are archived and verifiable
 
 **What it does NOT prove:**
 - That the specs capture what users actually care about
@@ -290,9 +324,9 @@ All contract source code is verified on Etherscan.
 - That external dependencies are correct
 
 **The honest statement:**
-> We have built the **infrastructure** for certification and made the "theorem
-> statements" a first-class, inspectable artifact. The gap between attestation
-> and certification is narrowing — the specs are now visible for anyone to judge.
+> We have built the **infrastructure** for certification and made both the "theorem
+> statements" and their "evidence" first-class, inspectable artifacts. The Z3 proof
+> bundle brings us significantly closer to a true proof certificate model.
 
 ---
 
@@ -513,18 +547,19 @@ No trust in the original prover. No need to re-run the proof search.
 
 | Aspect | Rocq/Lean Proof Certificate | BAIF Certification |
 |--------|----------------------------|-------------------|
-| What is it? | The proof term itself | Merkle hash of results + specs |
-| Statement visible? | Yes — theorem type | Yes — specs.json manifest |
-| Evidence checkable? | Yes — type-check ~5K lines | No — must re-run Verus + Z3 |
-| Trust assumption | Type system is sound | Z3 is correct, BAIF ran it honestly |
-| Portable? | Yes — term can be checked anywhere | Partially — specs readable, re-verification needs toolchain |
+| What is it? | The proof term itself | Merkle hash of results + specs + Z3 proofs |
+| Statement visible? | Yes — theorem type | Yes — `specs.json` manifest |
+| Evidence available? | Yes — proof term | Yes — `.smt2` formulas + `.proof` files |
+| Evidence checkable? | Yes — type-check ~5K lines | Partially — re-run Z3 on `.smt2` to verify |
+| Trust assumption | Type system is sound | Z3 is correct |
+| Portable? | Yes — term can be checked anywhere | Yes — `.smt2` files are standard SMT-LIB2 |
 
-Verus/Z3 don't emit portable proof terms. Z3 returns `sat`/`unsat` —
-not a checkable certificate. But the **theorem statements** (specs) are now
-explicit and inspectable, which is half the structure of a proof certificate.
+We now extract Z3's proof terms via `(set-option :proof true)` + `(get-proof)`.
+These are not as compact as Rocq proof terms, but they are **inspectable evidence**
+archived alongside the theorem statements.
 
-**Our position:** closer to certification than pure attestation — the *statement*
-is independently inspectable, even if the *evidence* requires re-running the verifier.
+**Our position:** significantly closer to certification — both the *statements* (specs)
+and the *evidence* (Z3 formulas + proofs) are independently inspectable artifacts.
 
 ---
 
@@ -535,37 +570,42 @@ The terminology spectrum:
 | Term | What It Implies | Where We Are |
 |------|-----------------|--------------|
 | **Pure attestation** | "Trust us, it passed" | ~~No longer here~~ |
-| **Attestation + specs** | Claim by trusted party, with inspectable theorem statements | **Here now** |
-| **Certificate** | Self-verifying proof object | Not yet (needs proof terms from Z3) |
+| **Attestation + specs** | Claim by trusted party, with inspectable theorem statements | ~~Previous milestone~~ |
+| **Attestation + specs + Z3 proofs** | Theorem statements + verifier evidence archived and hashable | **Here now** |
+| **Full certificate** | Self-verifying proof object (constant-time check) | Not yet (needs ZK compression) |
 
 **Current state:**
-> "BAIF attests that Verus accepted *these specific properties* (published in specs.json)
-> for commit X at time T. The specs are hashed into the on-chain Merkle root."
+> "BAIF certifies that Verus accepted *these specific properties* (published in `specs.json`)
+> for commit X at time T. The Z3 formulas and proof terms are archived in the proof bundle
+> and hashed into the on-chain Merkle root."
 
-Including specs in the record was the key step. What remains for full certification:
-- Proof terms from the verifier (Verus/Z3 don't provide this yet)
+What remains for full self-certifying proofs:
+- Independent Z3 proof checker (replay `.smt2` + `.proof` without full Z3)
+- ZK compression of Z3 proofs for constant-time on-chain verification (Pi-Squared vision)
 - Spec quality metrics and review processes (see `doc/toward_certification.md`)
 
 ---
 
-# Specs Are Now in the Certificate
+# Specs and Proofs Are Now in the Certificate
 
 We now record:
 - ✓ Commit hash (what code)
-- ✓ Content hash — Merkle root of results + specs (what was proven)
+- ✓ Content hash — Merkle root of results + specs + proofs (what was proven)
 - ✓ Toolchain versions (how verified)
 - ✓ **The specification manifest** (the "theorem statements")
+- ✓ **Z3 formulas** (the SMT-LIB2 queries encoding each function's spec)
+- ✓ **Z3 proof terms** (the evidence that each formula is unsatisfiable)
 
-The `specs.json` artifact (produced by `probe-verus specify`) contains:
-- Which functions have `requires`/`ensures` clauses
-- The actual text of pre/postconditions (with `--with-spec-text`)
-- Whether functions use `assume()`/`admit()` (trusted assumptions)
+The proof bundle (produced by `certify_cli generate-proofs`) contains:
+- `proofs.json` — per-function index with spec, formula file, and proof file
+- `smt_queries/*.smt2` — the exact Z3 queries (standard SMT-LIB2 format)
+- `z3_proofs/*.proof` — the Z3 proof terms (produced via legacy proof mode)
 
-A verifier can now confirm:
-> "These specific properties were proven — judge for yourself if they matter."
+A verifier can now:
+> "Read the specs. Inspect the Z3 formulas. Replay the proofs. Judge for yourself."
 
-**Remaining gap:** Automated assessment of spec quality (trivial spec detection,
-coverage metrics, taxonomy). See `doc/toward_certification.md` for the roadmap.
+**Remaining gap:** Independent proof checker (replay without full Z3),
+ZK compression for constant-time verification, and spec quality metrics.
 
 ---
 
@@ -693,26 +733,52 @@ Detailed workflow steps
 
 ---
 
-# Certification — Step 1: Verify
+# Certification — Step 1: Verify (with SMT Logging)
 
-Uses the `probe-verus/action@v1` reusable action:
+Uses the `probe-verus/action@v1` reusable action with extra Verus flags:
 
 ```yaml
-- name: Run Verus verification
+- name: Run Verus verification (with SMT logging)
   uses: beneficial-ai-foundation/probe-verus/action@v1
   with:
     project-path: target/${{ inputs.project_path }}
     package: ${{ inputs.package }}
     output-dir: ./output
+    verus-args: '--log smt --log-dir ./verus-smt-logs -V spinoff-all'
 ```
 
 **What it does:**
-- Clones the target repo at the specified ref
 - Installs the Verus toolchain (version from `Cargo.toml`)
 - Runs `probe-verus atomize` → function inventory
 - Runs `probe-verus verify` → `results.json`
+- `--log smt -V spinoff-all` → per-function `.smt2` files in `verus-smt-logs/`
 
-**Outputs:** `verified-count`, `total-functions`, `verus-version`, `rust-version`
+**Outputs:** `verified-count`, `total-functions`, `verus-version`, `rust-version`, `smt-log-dir`
+
+---
+
+# Certification — Step 1.5: Generate Z3 Proof Certificates
+
+```yaml
+- name: Generate Z3 proof certificates
+  run: |
+    Z3_BIN="$HOME/.cargo/bin/verus-x86-linux/z3"
+    uv run python3 -m certify_cli generate-proofs \
+      --smt-log-dir $SMT_LOG_DIR \
+      --results-file $RESULTS_FILE \
+      --specs-file $SPECS_FILE \
+      --output-dir ./output/proof-bundle \
+      --z3-binary $Z3_BIN --timeout 300
+```
+
+**What it does:**
+- Maps each probe-verus function ID to its per-function `.smt2` file
+- Copies matched `.smt2` files into `smt_queries/` (the Z3 formulas)
+- Injects `(set-option :proof true)` and `(get-proof)` into each query
+- Runs Z3 (bundled with Verus) to produce `.proof` files
+- Assembles `proofs.json` index with relative paths to all artifacts
+
+**Output:** Self-contained `proof-bundle/` directory
 
 ---
 
@@ -760,6 +826,8 @@ Uses the `probe-verus/action@v1` reusable action:
 | `badge.svg` | Pre-rendered SVG badge |
 | `history.json` | Full certification audit trail |
 | `results/{timestamp}.json` | Archived verification results |
+| `specs/{timestamp}.json` | Archived specification manifest |
+| `proofs/{timestamp}/` | Archived proof bundle (proofs.json + smt_queries/ + z3_proofs/) |
 
 Then commits and pushes to the repository.
 
