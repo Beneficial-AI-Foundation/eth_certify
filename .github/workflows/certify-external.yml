@@ -322,19 +322,19 @@ jobs:
           # Record the commit SHA on-chain
           COMMIT_SHA="${{ steps.commit.outputs.sha }}"
           if [ -n "$COMMIT_SHA" ]; then
-            CMD="$CMD --commit-sha \"$COMMIT_SHA\""
+            CMD="$CMD --commit-sha $COMMIT_SHA"
           fi
           
           # Add Safe for mainnet
           if [ "$NETWORK" = "mainnet" ]; then
             SAFE_ADDR="${{ vars.MAINNET_SAFE_ADDRESS }}"
-            CMD="$CMD --safe \"$SAFE_ADDR\" --execute"
+            CMD="$CMD --safe $SAFE_ADDR --execute"
           fi
           
           echo "Running: $CMD"
           
           set +e
-          OUTPUT=$($CMD 2>&1)
+          OUTPUT=$(eval $CMD 2>&1)
           EXIT_CODE=$?
           set -e
           

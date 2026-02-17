@@ -183,7 +183,7 @@ def certify_content(
     # Zero-padded commit hash for the forge script
     commit_bytes32 = "0x" + "0" * 64
     if commit_hash:
-        raw = commit_hash.replace("0x", "")
+        raw = commit_hash.replace("0x", "").strip('"').strip("'")
         commit_bytes32 = "0x" + raw.ljust(64, "0")
 
     args = [
@@ -316,9 +316,12 @@ def _certify_via_safe(
         )
 
     # Generate transaction data for manual submission
-    commit_hash_padded = commit_hash.ljust(66, "0") if commit_hash else "0x" + "0" * 64
-    if not commit_hash_padded.startswith("0x"):
-        commit_hash_padded = "0x" + commit_hash_padded.ljust(64, "0")
+    clean_commit = commit_hash.strip('"').strip("'") if commit_hash else ""
+    if clean_commit:
+        raw = clean_commit.replace("0x", "")
+        commit_hash_padded = "0x" + raw.ljust(64, "0")
+    else:
+        commit_hash_padded = "0x" + "0" * 64
 
     calldata = run_cast(
         [
