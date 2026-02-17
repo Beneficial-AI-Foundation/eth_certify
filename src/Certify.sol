@@ -1,106 +1,75 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+/// @title Certify — on-chain certification for formally verified code
+/// @notice Records Merkle-hashed verification results on Ethereum.
+///         Only the authorized certifier (BAIF Safe) can create certifications.
 contract Certify {
-    event Certified(
-        bytes32 indexed hash,
-        address indexed sender,
-        uint256 timestamp
-    );
+    uint8 public constant SCHEMA_VERSION = 2;
 
-    event WebsiteCertified(
-        bytes32 indexed urlHash,
+    address public immutable AUTHORIZED_CERTIFIER;
+
+    /// @notice Emitted when a verification result is certified on-chain.
+    event Certified(
+        bytes32 indexed identifierHash,
         bytes32 indexed contentHash,
         address indexed sender,
-        string url,
+        string identifier,
+        bytes32 commitHash,
         string description,
+        uint8 schemaVersion,
         uint256 timestamp
     );
 
-    /// @notice Event for certifying verification progress (e.g., Dalek-Lite)
-    event VerificationProgressCertified(
-        bytes32 indexed projectHash,
-        address indexed sender,
-        string projectUrl,
-        string gitCommit,
-        uint256 totalFunctions,
-        uint256 functionsWithSpecs,
-        uint256 fullyVerified,
-        uint256 timestamp
-    );
+    /// @notice Reverts when a non-authorized address attempts to certify.
+    error UnauthorizedCertifier(address caller, address expected);
 
-    /// @notice Certify a hash
-    /// @param hash The keccak256 hash 
-    function certify(bytes32 hash) external {
-        emit Certified(hash, msg.sender, block.timestamp);
+    /// @param _authorizedCertifier The only address allowed to call certify().
+    ///        Typically the BAIF Gnosis Safe.
+    constructor(address _authorizedCertifier) {
+        AUTHORIZED_CERTIFIER = _authorizedCertifier;
     }
 
-    /// @notice Certify multiple hashes in one transaction
-    /// @param hashes Array of hashes
-    function certifyBatch(bytes32[] calldata hashes) external {
-        uint256 len = hashes.length;
-        uint256 ts = block.timestamp;
-        for (uint256 i; i < len; ++i) {
-            emit Certified(hashes[i], msg.sender, ts);
+    modifier onlyAuthorized() {
+        _checkAuthorized();
+        _;
+    }
+
+    function _checkAuthorized() internal view {
+        if (msg.sender != AUTHORIZED_CERTIFIER) {
+            revert UnauthorizedCertifier(msg.sender, AUTHORIZED_CERTIFIER);
         }
     }
 
-    /// @notice Certify a website URL with its content hash
-    /// @param url The full URL of the website
-    /// @param contentHash The keccak256 hash of the website content at certification time
-    /// @param description Optional description (e.g., "Dalek-Lite Verification Progress")
-    function certifyWebsite(
-        string calldata url,
-        bytes32 contentHash,
-        string calldata description
-    ) external {
-        bytes32 urlHash = keccak256(bytes(url));
-        emit WebsiteCertified(
-            urlHash,
+    /// @notice Certify a verification result on-chain.
+    /// @param identifier  Project identifier (e.g. "owner/repo")
+    /// @param contentHash Merkle root: keccak256(results_hash || specs_hash [|| proofs_hash])
+    /// @param commitHash  Git commit SHA as bytes32 (20-byte SHA-1, zero-padded)
+    /// @param description Free-form description (e.g. "72/72 verified")
+    function certify(string calldata identifier, bytes32 contentHash, bytes32 commitHash, string calldata description)
+        external
+        onlyAuthorized
+    {
+        emit Certified(
+            keccak256(bytes(identifier)),
             contentHash,
             msg.sender,
-            url,
+            identifier,
+            commitHash,
             description,
+            SCHEMA_VERSION,
             block.timestamp
         );
     }
 
-    /// @notice Certify verification progress for a formal verification project
-    /// @param projectUrl The project's URL (e.g., GitHub Pages site)
-    /// @param gitCommit The git commit hash this data corresponds to
-    /// @param totalFunctions Total number of functions in the project
-    /// @param functionsWithSpecs Number of functions that have specifications
-    /// @param fullyVerified Number of functions fully verified
-    function certifyVerificationProgress(
-        string calldata projectUrl,
-        string calldata gitCommit,
-        uint256 totalFunctions,
-        uint256 functionsWithSpecs,
-        uint256 fullyVerified
-    ) external {
-        bytes32 projectHash = keccak256(bytes(projectUrl));
-        emit VerificationProgressCertified(
-            projectHash,
-            msg.sender,
-            projectUrl,
-            gitCommit,
-            totalFunctions,
-            functionsWithSpecs,
-            fullyVerified,
-            block.timestamp
-        );
+    /// @notice Compute the keccak256 hash of an identifier string.
+    /// @dev Pure convenience function for off-chain callers.
+    function hashIdentifier(string calldata id) external pure returns (bytes32) {
+        return keccak256(bytes(id));
     }
 
-    /// @notice Convenience function to compute URL hash off-chain or verify on-chain
-    /// @param url The URL to hash
-    /// @return The keccak256 hash of the URL
-    function hashUrl(string calldata url) external pure returns (bytes32) {
-        return keccak256(bytes(url));
-    }
-
-    /// @notice Convenience function to compute content hash from raw bytes
-    /// @param content The content bytes to hash
-    /// @return The keccak256 hash of the content
+    /// @notice Compute the keccak256 hash of arbitrary content bytes.
+    /// @dev Pure convenience function for off-chain callers.
     function hashContent(bytes calldata content) external pure returns (bytes32) {
         return keccak256(content);
     }

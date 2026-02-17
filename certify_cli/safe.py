@@ -158,54 +158,51 @@ def execute_safe_transaction(
         )
 
 
-def encode_certify_website_call(
-    url: str,
+def _hex_to_bytes32(hex_str: str) -> bytes:
+    """Convert a hex string (with or without 0x prefix) to 32 bytes."""
+    raw = hex_str[2:] if hex_str.startswith("0x") else hex_str
+    return bytes.fromhex(raw.ljust(64, "0"))
+
+
+def encode_certify_call(
+    identifier: str,
     content_hash: str,
+    commit_hash: str,
     description: str,
 ) -> bytes:
-    """Encode the certifyWebsite function call.
+    """Encode the certify() function call for the v2 contract.
 
     Returns the calldata bytes for calling:
-    certifyWebsite(string url, bytes32 contentHash, string description)
+    certify(string identifier, bytes32 contentHash, bytes32 commitHash, string description)
     """
-    # Function signature: certifyWebsite(string,bytes32,string)
-
-    # Create Web3 instance (doesn't need a provider for encoding)
     w3 = Web3()
 
-    # Encode the function call
-    # The content_hash should already be a hex string starting with 0x
-    content_hash_bytes = (
-        bytes.fromhex(content_hash[2:])
-        if content_hash.startswith("0x")
-        else bytes.fromhex(content_hash)
-    )
+    content_hash_bytes = _hex_to_bytes32(content_hash)
+    commit_hash_bytes = _hex_to_bytes32(commit_hash)
 
-    # Build the contract interface
     contract_abi = [
         {
             "inputs": [
-                {"internalType": "string", "name": "url", "type": "string"},
+                {"internalType": "string", "name": "identifier", "type": "string"},
                 {"internalType": "bytes32", "name": "contentHash", "type": "bytes32"},
+                {"internalType": "bytes32", "name": "commitHash", "type": "bytes32"},
                 {"internalType": "string", "name": "description", "type": "string"},
             ],
-            "name": "certifyWebsite",
+            "name": "certify",
             "outputs": [],
             "stateMutability": "nonpayable",
             "type": "function",
         }
     ]
 
-    # Create contract instance (address doesn't matter for encoding)
     contract = w3.eth.contract(
         address=Web3.to_checksum_address("0x0000000000000000000000000000000000000000"),
         abi=contract_abi,
     )
 
-    # Encode the function call
     calldata = contract.encode_abi(
-        "certifyWebsite",
-        args=[url, content_hash_bytes, description],
+        "certify",
+        args=[identifier, content_hash_bytes, commit_hash_bytes, description],
     )
 
-    return bytes.fromhex(calldata[2:])  # Remove 0x prefix and convert to bytes
+    return bytes.fromhex(calldata[2:])

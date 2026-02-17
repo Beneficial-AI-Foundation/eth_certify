@@ -53,6 +53,10 @@ inputs:
     description: 'Etherscan API key (optional, for contract verification)'
     required: false
     default: ''
+  commit-sha:
+    description: 'Git commit SHA to record on-chain (as bytes32 in the Certified event)'
+    required: false
+    default: ''
   token:
     description: 'GitHub token for checking out the certify repo (required for private repos, use a PAT with repo access)'
     required: false
@@ -131,6 +135,12 @@ runs:
       run: |
         # Build command
         CMD="uv run python3 -m certify_cli certify --network ${{ inputs.network }}"
+        
+        # Add commit SHA if provided
+        COMMIT_SHA="${{ inputs.commit-sha }}"
+        if [ -n "$COMMIT_SHA" ]; then
+          CMD="$CMD --commit-sha \"$COMMIT_SHA\""
+        fi
         
         # Add Safe options if provided
         SAFE_ADDR="${{ inputs.safe-address }}"

@@ -1,4 +1,4 @@
-"""Website verification against on-chain certifications."""
+"""Verification of on-chain certifications."""
 
 import re
 from dataclasses import dataclass
@@ -15,8 +15,27 @@ from .foundry import (
 )
 
 
-# WebsiteCertified event signature
-EVENT_SIGNATURE = "0xe902b6df7966d5f61a8031b28d5925fb223a483f4f9782928884cf243abec003"
+# Certified event signature (v2 contract)
+# Certified(bytes32 indexed identifierHash, bytes32 indexed contentHash,
+#           address indexed sender, string identifier, bytes32 commitHash,
+#           string description, uint8 schemaVersion, uint256 timestamp)
+EVENT_SIGNATURE = "0x"  # Placeholder — computed below
+
+def _compute_event_signature() -> str:
+    """Compute keccak256 of the Certified event signature."""
+    from .foundry import cast_keccak
+    sig = "Certified(bytes32,bytes32,address,string,bytes32,string,uint8,uint256)"
+    return cast_keccak(sig.encode())
+
+# Lazy initialization to avoid calling cast at import time
+_EVENT_SIG_CACHE: str | None = None
+
+def _get_event_signature() -> str:
+    global _EVENT_SIG_CACHE, EVENT_SIGNATURE
+    if _EVENT_SIG_CACHE is None:
+        _EVENT_SIG_CACHE = _compute_event_signature()
+        EVENT_SIGNATURE = _EVENT_SIG_CACHE
+    return _EVENT_SIG_CACHE
 
 # Default values
 DEFAULT_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
@@ -170,7 +189,7 @@ def _fetch_certification(
     current_block = cast_block_number(rpc_url)
     from_block = current_block - DEFAULT_BLOCK_LOOKBACK
 
-    logs = cast_logs(rpc_url, contract_address, EVENT_SIGNATURE, url_hash, from_block)
+    logs = cast_logs(rpc_url, contract_address, _get_event_signature(), url_hash, from_block)
 
     if not logs:
         return None
@@ -179,13 +198,19 @@ def _fetch_certification(
 
 
 def _parse_logs(logs: str) -> Optional[OnChainCertification]:
-    """Parse cast logs output to extract certification data."""
-    # Extract all topic hashes from the logs
-    # Topics appear as 0x followed by 64 hex chars, typically in a topics: [...] block
-    # Find the topics section and extract all 64-char hex values from it
+    """Parse cast logs output to extract certification data.
+
+    Event layout (v2):
+        topic[0] = event signature hash
+        topic[1] = identifierHash (bytes32, indexed)
+        topic[2] = contentHash   (bytes32, indexed)
+        topic[3] = sender        (address, indexed, padded to 32 bytes)
+        data     = ABI-encoded (string identifier, bytes32 commitHash,
+                   string description, uint8 schemaVersion, uint256 timestamp)
+    """
+    # Extract topics
     topics_section = re.search(r"topics:\s*\[(.*?)\]", logs, re.DOTALL | re.IGNORECASE)
     if not topics_section:
-        # Fallback: try plain format without brackets
         topics_section = re.search(
             r"topics:\s*\n((?:\s+0x[a-f0-9]{64}\s*\n)+)", logs, re.IGNORECASE
         )
@@ -193,16 +218,11 @@ def _parse_logs(logs: str) -> Optional[OnChainCertification]:
     if not topics_section:
         return None
 
-    # Extract all 64-char hex values from the topics section
     topics = re.findall(r"0x[a-f0-9]{64}", topics_section.group(1), re.IGNORECASE)
 
     if len(topics) < 4:
         return None
 
-    # topics[0] = event signature
-    # topics[1] = urlHash (indexed)
-    # topics[2] = contentHash (indexed)
-    # topics[3] = sender (indexed, padded to 32 bytes)
     content_hash = topics[2]
     certifier_padded = topics[3]
     certifier_address = "0x" + certifier_padded[-40:]
@@ -215,17 +235,18 @@ def _parse_logs(logs: str) -> Optional[OnChainCertification]:
     tx_match = re.search(r"transactionHash:\s*(0x[a-f0-9]+)", logs, re.IGNORECASE)
     tx_hash = tx_match.group(1) if tx_match else ""
 
-    # Extract timestamp from data field
-    # Timestamp is the 3rd 32-byte word in data (offset 128-192 chars after 0x)
+    # Extract timestamp from the ABI-encoded data.
+    # The data contains dynamic types (two strings) interleaved with static types.
+    # The last 32-byte word is always `timestamp` (uint256).
     timestamp: Optional[int] = None
     data_match = re.search(r"data:\s*(0x[a-f0-9]+)", logs, re.IGNORECASE)
     if data_match:
-        data = data_match.group(1)
-        if len(data) >= 194:  # 0x + 192 hex chars (3 * 64)
-            timestamp_hex = data[130:194]  # chars 130-194 (3rd word)
+        data_hex = data_match.group(1)[2:]  # strip 0x
+        if len(data_hex) >= 64:
+            timestamp_hex = data_hex[-64:]  # last 32-byte word = timestamp
             try:
-                timestamp = cast_to_dec("0x" + timestamp_hex)
-            except Exception:
+                timestamp = int(timestamp_hex, 16)
+            except ValueError:
                 pass
 
     return OnChainCertification(
@@ -323,12 +344,12 @@ def _fetch_certification_by_content_hash(
         if from_block < 0:
             from_block = 0
 
-    # Query with empty topic1 ("") to match any URL hash, filter by content hash
+    # Query with empty topic1 ("") to match any identifier hash, filter by content hash
     logs = cast_logs(
         rpc_url,
         contract_address,
-        EVENT_SIGNATURE,
-        "",  # Match any urlHash
+        _get_event_signature(),
+        "",  # Match any identifierHash
         from_block,
         content_hash,  # Filter by contentHash
     )

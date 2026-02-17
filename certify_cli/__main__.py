@@ -28,6 +28,14 @@ def main() -> int:
         default="sepolia",
         help="Network to deploy to (default: sepolia)",
     )
+    deploy_parser.add_argument(
+        "--authorized-address",
+        type=str,
+        metavar="ADDRESS",
+        default=None,
+        help="Address authorized to call certify() (e.g. the BAIF Safe). "
+        "Defaults to the deployer's own address.",
+    )
 
     # Certify command
     certify_parser = subparsers.add_parser(
@@ -57,6 +65,13 @@ def main() -> int:
         metavar="PATH",
         help="Path to specs JSON (from probe-verus specify). Enables Merkle-style hashing: "
         "content_hash = keccak256(results_hash || specs_hash)",
+    )
+    certify_parser.add_argument(
+        "--commit-sha",
+        type=str,
+        default=None,
+        metavar="SHA",
+        help="Git commit SHA to record on-chain (as bytes32 in the Certified event)",
     )
 
     # Verify command
@@ -302,7 +317,7 @@ def _handle_deploy(args: argparse.Namespace) -> int:
     env = EnvConfig.load()
     network = _parse_network(args.network)
 
-    result = deploy_contract(env, network)
+    result = deploy_contract(env, network, authorized_address=args.authorized_address)
     print(result.message)
     return 0 if result.success else 1
 
@@ -332,6 +347,7 @@ def _handle_certify(args: argparse.Namespace) -> int:
         network,
         safe_address=args.safe,
         safe_execute=args.execute,
+        commit_hash=args.commit_sha,
     )
     print(result.message)
 

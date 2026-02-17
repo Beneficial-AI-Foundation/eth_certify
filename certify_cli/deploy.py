@@ -23,28 +23,49 @@ class DeployResult:
 def deploy_contract(
     env: EnvConfig,
     network: Network,
+    authorized_address: Optional[str] = None,
 ) -> DeployResult:
-    """Deploy the Certify contract to the specified network."""
+    """Deploy the Certify contract to the specified network.
+
+    Args:
+        env: Environment configuration (RPC, keys, etc.)
+        network: Target network.
+        authorized_address: The only address that may call certify().
+                            Typically the BAIF Gnosis Safe address.
+                            If omitted, defaults to the deployer's own address.
+    """
     print(f"Deploying Certify contract to {network.value}...")
 
     private_key = env.get_private_key(network)
     rpc_url = env.get_rpc_url(network)
 
+    # Determine the authorized certifier address
+    if not authorized_address:
+        # Default: deployer's own address (useful for local testing)
+        from eth_account import Account
+        authorized_address = Account.from_key(private_key).address
+        print(f"No --authorized-address given; defaulting to deployer: {authorized_address}")
+
+    print(f"Authorized certifier: {authorized_address}")
+
     args = [
         "script",
         "script/Certify.s.sol:DeployCertify",
+        "--sig",
+        "run(address)",
+        authorized_address,
         "--broadcast",
         "--rpc-url",
         rpc_url,
-        "--private-key",
-        private_key,
     ]
 
     # Add verification flags for Etherscan-supported networks if API key is available
     if env.etherscan_api_key and network in (Network.MAINNET, Network.SEPOLIA):
         args.extend(["--verify", "--etherscan-api-key", env.etherscan_api_key])
 
-    result = run_forge(args)
+    # Pass private key via environment variable (not CLI arg) to avoid
+    # leaking it in the process list (/proc/<pid>/cmdline).
+    result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
 
     if result.success:
         return DeployResult(
@@ -79,6 +100,7 @@ def certify_content(
     network: Network,
     safe_address: Optional[str] = None,
     safe_execute: bool = False,
+    commit_hash: Optional[str] = None,
 ) -> CertifyResult:
     """Certify content (from URL or file) on-chain.
 
@@ -134,33 +156,44 @@ def certify_content(
             safe_address=safe_address,
             content_hash=content_hash,
             execute=safe_execute,
+            commit_hash=commit_hash or "",
         )
         result.results_hash = results_hash
         result.specs_hash = specs_hash
         return result
 
-    print("\nCertifying content...")
+    print("\nCertifying content (direct forge-script path)...")
+    if network not in (Network.ANVIL, Network.LOCAL):
+        print("Warning: The contract enforces msg.sender == authorizedCertifier.")
+        print("For mainnet/sepolia, use --safe ADDRESS --execute instead.")
 
     private_key = env.get_private_key(network)
     rpc_url = env.get_rpc_url(network)
 
+    # Zero-padded commit hash for the forge script
+    commit_bytes32 = "0x" + "0" * 64
+    if commit_hash:
+        raw = commit_hash.replace("0x", "")
+        commit_bytes32 = "0x" + raw.ljust(64, "0")
+
     args = [
         "script",
-        "script/Certify.s.sol:CertifyWebsiteContent",
+        "script/Certify.s.sol:CertifyDirect",
         "--sig",
-        "run(address,string,bytes32,string)",
+        "run(address,string,bytes32,bytes32,string)",
         env.certify_address,
         source,
         content_hash,
+        commit_bytes32,
         certify_config.description,
         "--broadcast",
         "--rpc-url",
         rpc_url,
-        "--private-key",
-        private_key,
     ]
 
-    result = run_forge(args)
+    # Pass private key via environment variable (not CLI arg) to avoid
+    # leaking it in the process list (/proc/<pid>/cmdline).
+    result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
 
     if result.success:
         # Extract transaction hash from broadcast file
@@ -239,6 +272,7 @@ def _certify_via_safe(
     safe_address: str,
     content_hash: str,
     execute: bool = False,
+    commit_hash: str = "",
 ) -> CertifyResult:
     """Certify via Gnosis Safe.
 
@@ -267,16 +301,22 @@ def _certify_via_safe(
             contract_address=contract_address,
             source=source,
             content_hash=content_hash,
+            commit_hash=commit_hash,
             description=description,
         )
 
     # Generate transaction data for manual submission
+    commit_hash_padded = commit_hash.ljust(66, "0") if commit_hash else "0x" + "0" * 64
+    if not commit_hash_padded.startswith("0x"):
+        commit_hash_padded = "0x" + commit_hash_padded.ljust(64, "0")
+
     calldata = run_cast(
         [
             "calldata",
-            "certifyWebsite(string,bytes32,string)",
+            "certify(string,bytes32,bytes32,string)",
             source,
             content_hash,
+            commit_hash_padded,
             description,
         ]
     )
@@ -291,54 +331,31 @@ def _certify_via_safe(
     )
 
     message = f"""
-✅ Transaction data generated for Safe!
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📋 TRANSACTION DETAILS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Transaction data generated for Safe.
 
 Contract:     {contract_address}
-Function:     certifyWebsite(string,bytes32,string)
+Function:     certify(string,bytes32,bytes32,string)
 
 Parameters:
-  url:         {source}
+  identifier:  {source}
   contentHash: {content_hash}
+  commitHash:  {commit_hash_padded}
   description: {description}
 
 Calldata:
 {calldata}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📝 INSTRUCTIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+Instructions:
 1. Open your Safe: {safe_url}
-
-2. Click "New Transaction" → "Transaction Builder"
-
-3. Enter contract address:
-   {contract_address}
-
+2. Click "New Transaction" > "Transaction Builder"
+3. Enter contract address: {contract_address}
 4. Paste this ABI:
-   [{{"inputs":[{{"internalType":"string","name":"url","type":"string"}},{{"internalType":"bytes32","name":"contentHash","type":"bytes32"}},{{"internalType":"string","name":"description","type":"string"}}],"name":"certifyWebsite","outputs":[],"stateMutability":"nonpayable","type":"function"}}]
+   [{{"inputs":[{{"internalType":"string","name":"identifier","type":"string"}},{{"internalType":"bytes32","name":"contentHash","type":"bytes32"}},{{"internalType":"bytes32","name":"commitHash","type":"bytes32"}},{{"internalType":"string","name":"description","type":"string"}}],"name":"certify","outputs":[],"stateMutability":"nonpayable","type":"function"}}]
+5. Select function: certify
+6. Fill in parameters and execute.
 
-5. Select function: certifyWebsite
-
-6. Fill in parameters:
-   • url: {source}
-   • contentHash: {content_hash}
-   • description: {description}
-
-7. Click "Add transaction" → "Create Batch" → "Send Batch"
-
-8. Sign and execute with your connected wallet
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💡 TIP: Add --execute to run programmatically:
-   certify --network {network.value} --safe {safe_address} --execute
+TIP: Add --execute to run programmatically:
+  certify --network {network.value} --safe {safe_address} --execute
 
 """
 
@@ -358,10 +375,11 @@ def _execute_safe_certification(
     contract_address: str,
     source: str,
     content_hash: str,
+    commit_hash: str,
     description: str,
 ) -> CertifyResult:
     """Execute certification through Safe programmatically."""
-    from .safe import encode_certify_website_call, execute_safe_transaction
+    from .safe import encode_certify_call, execute_safe_transaction
 
     print(f"\nExecuting certification via Safe {safe_address}...")
 
@@ -370,9 +388,10 @@ def _execute_safe_certification(
     rpc_url = env.get_rpc_url(network)
 
     # Encode the function call
-    calldata = encode_certify_website_call(
-        url=source,
+    calldata = encode_certify_call(
+        identifier=source,
         content_hash=content_hash,
+        commit_hash=commit_hash,
         description=description,
     )
 

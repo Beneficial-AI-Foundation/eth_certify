@@ -319,6 +319,12 @@ jobs:
           # Build command
           CMD="uv run python3 -m certify_cli certify --network $NETWORK"
           
+          # Record the commit SHA on-chain
+          COMMIT_SHA="${{ steps.commit.outputs.sha }}"
+          if [ -n "$COMMIT_SHA" ]; then
+            CMD="$CMD --commit-sha \"$COMMIT_SHA\""
+          fi
+          
           # Add Safe for mainnet
           if [ "$NETWORK" = "mainnet" ]; then
             SAFE_ADDR="${{ vars.MAINNET_SAFE_ADDRESS }}"

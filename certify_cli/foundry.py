@@ -1,11 +1,14 @@
 """Foundry CLI wrappers (forge and cast commands)."""
 
 import io
+import ipaddress
 import os
+import socket
 import subprocess
 import zipfile
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -19,13 +22,29 @@ class ForgeResult:
     stderr: str
 
 
-def run_forge(args: list[str], capture_output: bool = False) -> ForgeResult:
-    """Run a forge command with the given arguments."""
+def run_forge(
+    args: list[str],
+    capture_output: bool = False,
+    env_extra: dict[str, str] | None = None,
+) -> ForgeResult:
+    """Run a forge command with the given arguments.
+
+    Args:
+        args: Arguments to pass to forge.
+        capture_output: Capture stdout/stderr instead of inheriting.
+        env_extra: Extra environment variables merged into the current env.
+                   Use this instead of CLI flags for secrets (e.g. private keys)
+                   to avoid leaking them in /proc/<pid>/cmdline.
+    """
     cmd = ["forge"] + args
+    env = None
+    if env_extra:
+        env = {**os.environ, **env_extra}
     result = subprocess.run(
         cmd,
         capture_output=capture_output,
         text=True,
+        env=env,
     )
     return ForgeResult(
         success=result.returncode == 0,
@@ -105,6 +124,35 @@ def cast_logs(
         return None
 
 
+def _validate_url(url: str) -> None:
+    """Validate a URL against SSRF attacks.
+
+    Blocks private/loopback/link-local IPs, non-HTTP(S) schemes,
+    and URLs without a hostname.
+
+    Raises:
+        ValueError: If the URL is unsafe.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme '{parsed.scheme}': {url}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"No hostname in URL: {url}")
+
+    # Resolve hostname and check all addresses
+    try:
+        for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
+            addr = ipaddress.ip_address(info[4][0])
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                raise ValueError(
+                    f"URL resolves to blocked address {addr}: {url}"
+                )
+    except socket.gaierror as exc:
+        raise ValueError(f"Cannot resolve hostname '{hostname}': {exc}") from exc
+
+
 def fetch_content(source: str, filename: Optional[str] = None) -> bytes:
     """Fetch content from a URL, GitHub artifact, or local file path.
 
@@ -121,7 +169,8 @@ def fetch_content(source: str, filename: Optional[str] = None) -> bytes:
     if source.startswith("github://"):
         return _fetch_github_artifact(source, filename)
     elif _is_url(source):
-        response = httpx.get(source, follow_redirects=True)
+        _validate_url(source)
+        response = httpx.get(source, follow_redirects=False)
         response.raise_for_status()
         return response.content
     else:
