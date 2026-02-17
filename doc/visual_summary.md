@@ -278,18 +278,16 @@ function certify(
 **Independent verification path:**
 
 ```bash
-# 1. Query certification events
-cast logs --address 0x4f2a70eC878E9Adae88FF0c7528ebEbf83dFD83c \
-          --from-block 24196278 \
-          --rpc-url https://ethereum-rpc.publicnode.com
+# All-in-one: verify stored hashes, Merkle structure, proof bundle, taxonomy
+uv run python -m certify_cli verify-certification \
+  --cert-id project-id --commit <sha> --network sepolia --json
 
-# 2. Extract contentHash from event
-# topics[2] = 0x545a9a795ee534ae61ecf4f72ad2202e823650931a0d1771d15f0b74c9103d06
-
-# 3. Recompute hash from stored results
-cat certifications/project-id/results/latest.json | cast keccak
-
-# 4. Compare: if hashes match, results are authentic
+# Or manually with Foundry:
+# 1. Recompute hash from stored results
+RESULTS_HASH=$(cast keccak < certifications/project-id/results/latest.json)
+# 2. Query on-chain certification
+uv run python -m certify_cli verify-hash <content_hash> --network sepolia
+# 3. Compare: if hashes match, results are authentic
 ```
 
 ---

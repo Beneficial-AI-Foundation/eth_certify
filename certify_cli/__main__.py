@@ -9,6 +9,7 @@ from .deploy import certify_content, deploy_contract
 from .proofs import build_proofs_json, summarise_proofs, write_proofs_json
 from .registry import update_registry
 from .verify import verify_by_content_hash, verify_content
+from .verify_certification import verify_certification
 
 
 def main() -> int:
@@ -121,6 +122,43 @@ def main() -> int:
         type=int,
         default=None,
         help="Start block for log search (default: current - 50000)",
+    )
+
+    # Verify-certification command (local registry + hash checks)
+    verify_cert_parser = subparsers.add_parser(
+        "verify-certification",
+        help="Verify a stored certification (registry lookup, hash checks, Merkle structure, proof bundle)",
+    )
+    verify_cert_parser.add_argument(
+        "--cert-id",
+        type=str,
+        required=True,
+        help="Certification ID (e.g., 'beneficial-ai-foundation-pmemlog_with_callgraph')",
+    )
+    verify_cert_parser.add_argument(
+        "--commit",
+        type=str,
+        required=True,
+        help="Git commit SHA to look up",
+    )
+    verify_cert_parser.add_argument(
+        "--network",
+        type=str,
+        choices=["mainnet", "sepolia"],
+        default="sepolia",
+        help="Network to match in history (default: sepolia)",
+    )
+    verify_cert_parser.add_argument(
+        "--base-dir",
+        type=str,
+        default="certifications",
+        help="Base directory for certifications (default: certifications)",
+    )
+    verify_cert_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="output_json",
+        help="Output results as JSON to stdout (human-readable summary always goes to stderr)",
     )
 
     # Update-registry command
@@ -295,6 +333,8 @@ def main() -> int:
             return _handle_verify(args)
         elif args.command == "verify-hash":
             return _handle_verify_hash(args)
+        elif args.command == "verify-certification":
+            return _handle_verify_certification(args)
         elif args.command == "update-registry":
             return _handle_update_registry(args)
         elif args.command == "generate-proofs":
@@ -422,6 +462,28 @@ def _handle_verify_hash(args: argparse.Namespace) -> int:
     )
     print(result.message)
     return 0 if result.verified else 1
+
+
+def _handle_verify_certification(args: argparse.Namespace) -> int:
+    """Handle the verify-certification command."""
+    import json as json_mod
+
+    result = verify_certification(
+        cert_id=args.cert_id,
+        commit=args.commit,
+        network=args.network,
+        base_dir=Path(args.base_dir),
+    )
+
+    # Always print human-readable summary to stderr
+    result.print_human()
+
+    if args.output_json:
+        print(json_mod.dumps(result.to_json(), indent=2))
+
+    if not result.found:
+        return 2
+    return 0 if result.all_passed else 1
 
 
 def _handle_update_registry(args: argparse.Namespace) -> int:

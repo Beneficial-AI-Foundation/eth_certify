@@ -244,20 +244,29 @@ Single GitHub Actions job — no human intervention after dispatch.
 **`verify.yml`** — triggered manually with a repo URL, commit SHA, and network.
 
 ```
-┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
-│ Lookup cert│ │ Hash check │ │ Merkle     │ │ Proof      │ │ On-chain   │ │ Fresh Verus│
-│ in registry│▶│ stored     │▶│ structure  │▶│ bundle     │▶│ event      │▶│ re-run     │
-│            │ │ files vs   │ │ check      │ │ integrity  │ │ query      │ │ & compare  │
-│history.json│ │ hashes     │ │ 2/3-leaf   │ │ check      │ │ eth_getLogs│ │ probe-verus│
-└────────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────┘
+┌──────────────────────────────────────────┐ ┌────────────┐ ┌────────────┐
+│ certify_cli verify-certification         │ │ On-chain   │ │ Fresh Verus│
+│                                          │ │ event      │ │ re-run     │
+│  Registry lookup + hash check + Merkle   │▶│ query      │▶│ & compare  │
+│  structure + proof bundle + taxonomy     │ │ eth_getLogs│ │ probe-verus│
+│  (single Python command, JSON output)    │ │            │ │            │
+└──────────────────────────────────────────┘ └────────────┘ └────────────┘
 ```
+
+The `verify-certification` command performs all local checks in one call:
+
+| Check | What it verifies | Catches |
+|---|---|---|
+| **Registry lookup** | Find certification by commit SHA + network | Missing certifications |
+| **Stored hashes** | `keccak256(stored file)` = recorded hash? (results, specs) | Tampered artifacts |
+| **Merkle structure** | `keccak256(results_hash \|\| specs_hash [\|\| proofs_hash])` = on-chain `contentHash`? | Inconsistent Merkle tree |
+| **Proof bundle** | All `.smt2` and `.proof` files referenced in `proofs.json` exist? | Missing/corrupt proof artifacts |
+| **Taxonomy** | Extract spec-label summary from stored specs | N/A (informational) |
+
+Followed by workflow-level steps:
 
 | Step | What it checks | Catches |
 |---|---|---|
-| **Registry lookup** | Find certification by commit SHA + network | Missing certifications |
-| **Hash verification** | `keccak256(stored file)` = recorded hash? (results, specs) | Tampered artifacts |
-| **Merkle check** | `keccak256(results_hash \|\| specs_hash [\|\| proofs_hash])` = on-chain `contentHash`? | Inconsistent Merkle tree |
-| **Proof bundle** | All `.smt2` and `.proof` files referenced in `proofs.json` exist? | Missing/corrupt proof artifacts |
 | **On-chain check** | Query Ethereum for the certification event | Fake/deleted certifications |
 | **Fresh re-verification** | Re-run Verus, compare verified/total counts | Non-reproducible results |
 
@@ -838,43 +847,28 @@ Then commits and pushes to the repository.
 
 ---
 
-# Verification — Step 1: Registry Lookup
+# Verification — Step 1: Local Verification (Python)
 
 ```yaml
-- name: Look up certification in registry
+- name: Verify stored certification
   run: |
-    CERT=$(jq -r --arg commit "$COMMIT_ID" --arg network "$NETWORK" \
-      '.certifications[] | select(.commit_sha == $commit
-                           and .network == $network)' \
-      "$HISTORY_FILE")
+    OUTPUT=$(uv run python -m certify_cli verify-certification \
+      --cert-id "$CERT_ID" --commit "$COMMIT_ID" \
+      --network "$NETWORK" --json)
 ```
 
-Finds the certification record matching the commit SHA and network.
-Extracts: `content_hash`, `tx_hash`, `verified`, `total`, `results_file`.
+A single Python command performs all local checks:
+1. **Registry lookup** — finds certification by commit + network in `history.json`
+2. **Stored hash check** — `keccak256(results.json)` matches recorded `results_hash`
+3. **Merkle structure** — reconstructs `content_hash` from leaf hashes
+4. **Proof bundle integrity** — all `.smt2` and `.proof` files referenced in `proofs.json` exist
+5. **Taxonomy extraction** — summarizes spec-labels from stored specs
+
+Outputs structured JSON with pass/fail/skip status for each check.
 
 ---
 
-# Verification — Step 2: Hash Verification
-
-```yaml
-- name: Verify stored results hash
-  run: |
-    COMPUTED_HASH=$(cast keccak < "$RESULTS_FILE")
-    if [ "$COMPUTED_HASH" = "$EXPECTED_HASH" ]; then
-      echo "Stored results hash matches certification record"
-    fi
-```
-
-**What it checks:**
-1. Reads the stored `results.json` from the certification archive
-2. Computes `keccak256` of the file contents
-3. Compares with the on-chain `contentHash`
-
-If they match: the results file has not been tampered with since certification.
-
----
-
-# Verification — Step 3: On-Chain Check
+# Verification — Step 2: On-Chain Check
 
 ```yaml
 - name: Verify on-chain certification

@@ -60,6 +60,13 @@ def run_cast(args: list[str]) -> str:
     return result.stdout.strip()
 
 
+def strip_0x(hex_str: str) -> str:
+    """Strip the ``0x`` prefix from a hex string, raising on invalid input."""
+    if not hex_str.startswith("0x"):
+        raise ValueError(f"Expected 0x-prefixed hex string, got: {hex_str!r}")
+    return hex_str[2:]
+
+
 def cast_keccak(data: str | bytes) -> str:
     """Compute keccak256 hash using cast."""
     if isinstance(data, str):
@@ -295,13 +302,15 @@ def compute_merkle_content_hash(
     specs_hash = cast_keccak(specs_content)
 
     # Concatenate the raw 32-byte hashes
-    combined = bytes.fromhex(results_hash[2:]) + bytes.fromhex(specs_hash[2:])
+    combined = bytes.fromhex(strip_0x(results_hash)) + bytes.fromhex(
+        strip_0x(specs_hash)
+    )
 
     proofs_hash = None
     if proofs_source:
         proofs_content = fetch_content(proofs_source)
         proofs_hash = cast_keccak(proofs_content)
-        combined += bytes.fromhex(proofs_hash[2:])
+        combined += bytes.fromhex(strip_0x(proofs_hash))
 
     content_hash = cast_keccak(combined)
 

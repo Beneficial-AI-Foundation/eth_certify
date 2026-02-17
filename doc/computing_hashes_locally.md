@@ -50,24 +50,38 @@ CONTENT_HASH=$(echo -n "$COMBINED" | xxd -r -p | cast keccak)
 echo "Content hash (3-leaf): $CONTENT_HASH"
 ```
 
-This is exactly what [certify_cli/foundry.py](certify_cli/foundry.py) does in `compute_merkle_content_hash()` (lines 261-308) and what [verify.yml](.github/workflows/verify.yml) does at lines 234-316.
+This is exactly what [certify_cli/foundry.py](certify_cli/foundry.py) does in `compute_merkle_content_hash()` (lines 261-308).
+
+## Verifying a Stored Certification
+
+Instead of running the shell commands above manually, you can use the CLI to perform all local verification checks at once (registry lookup, stored hash check, Merkle structure, proof bundle integrity, taxonomy).
+
+Requires: [Foundry](https://book.getfoundry.sh/) (`cast`), Python 3.12+, and [uv](https://docs.astral.sh/uv/). Run `uv sync` in the certify repo first to install Python dependencies.
+
+```bash
+# From the certify repo directory (after running `uv sync`):
+uv run python -m certify_cli verify-certification \
+  --cert-id beneficial-ai-foundation-pmemlog_with_callgraph \
+  --commit 3ea6578c0cac7aeab244e858947e1b023760baa1 \
+  --network sepolia \
+  --json
+```
+
+This outputs structured JSON with all check results. Add `--json` for machine-readable output, or omit it for a human-readable summary. This is the same command that [verify.yml](.github/workflows/verify.yml) uses.
 
 ## What the Dockerfile Needs
 
 To replicate [verify.yml](.github/workflows/verify.yml), the Docker image must include:
 
-- **Python 3.12 + uv** 
+- **Python 3.12 + uv** -- for `certify_cli` (`uv sync` in certify repo)
 - **Foundry** -- for `cast keccak` and on-chain queries (install via `curl -L https://foundry.paradigm.xyz | bash && foundryup`)
 - **probe-verus** -- the Rust binary (from `beneficial-ai-foundation/probe-verus`) for fresh re-verification
 - **Verus** -- the verification tool (installed by probe-verus action)
-- **jq, xxd** -- for shell-level hash manipulation and proof bundle checks
 
 ### Pipeline steps to replicate:
 
-1. Look up certification record from `certifications/<cert-id>/history.json`
-2. Verify stored results hash: `cast keccak < results.json` matches recorded `results_hash`
-3. Verify stored specs hash: `cast keccak < specs.json` matches recorded `specs_hash`
-4. Verify Merkle root: `keccak256(results_hash || specs_hash [|| proofs_hash])` matches on-chain `content_hash`
-5. Verify proof bundle integrity: check all `.smt2` and `.proof` files referenced in `proofs.json` exist
-6. Verify on-chain: `uv run python -m certify_cli verify-hash <content_hash> --network <network>`
-7. Fresh re-verification: re-run `probe-verus` on the same commit and compare verified/total counts
+1. Verify stored certification (registry, hashes, Merkle, proof bundle):
+   `uv run python -m certify_cli verify-certification --cert-id <id> --commit <sha> --network <network>`
+2. Verify on-chain:
+   `uv run python -m certify_cli verify-hash <content_hash> --network <network>`
+3. Fresh re-verification: re-run `probe-verus` on the same commit and compare verified/total counts
