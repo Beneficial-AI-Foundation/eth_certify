@@ -44,32 +44,33 @@ A system that mathematically verifies software correctness and creates immutable
 │                              BAIF CERTIFY PIPELINE                                  │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 
-  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-  │   SOURCE CODE    │      │   VERIFICATION   │      │   CERTIFICATION  │
-  │   + SPECS        │─────▶│   ENGINE         │─────▶│   LAYER          │
-  │                  │      │                  │      │                  │
-  │  Rust + Verus    │      │  probe-verus     │      │  Ethereum        │
-  │  annotations     │      │  + Verus         │      │  smart contract  │
-  └──────────────────┘      └──────────────────┘      └──────────────────┘
-          │                         │                         │
-          ▼                         ▼                         ▼
-  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-  │  • Pre/post      │      │  • SMT solving   │      │  • Merkle hash   │
-  │    conditions    │      │  • Type checking │      │    of results +  │
-  │  • Invariants    │      │  • Proof search  │      │    specs         │
-  │  • Ghost code    │      │  • 72/72 verified│      │  • Timestamped   │
-  └──────────────────┘      │  • Spec manifest │      │    event log     │
-                            └──────────────────┘      └──────────────────┘
-                                                              │
-                                                              ▼
-                                                      ┌──────────────────┐
-                                                      │  PUBLIC BADGE    │
-                                                      │  + HISTORY       │
-                                                      │  + SPECS         │
-                                                      │                  │
-                                                      │  JSON endpoint   │
-                                                      │  SVG artifact    │
-                                                      └──────────────────┘
+  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+  │   SOURCE CODE    │   │   VERIFICATION   │   │  Z3 PROOF        │   │   CERTIFICATION  │
+  │   + SPECS        │──▶│   ENGINE         │──▶│  EXTRACTION      │──▶│   LAYER          │
+  │                  │   │                  │   │                  │   │                  │
+  │  Rust + Verus    │   │  probe-verus     │   │  certify_cli     │   │  Ethereum        │
+  │  annotations     │   │  + Verus + Z3    │   │  generate-proofs │   │  smart contract  │
+  └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘
+          │                       │                       │                       │
+          ▼                       ▼                       ▼                       ▼
+  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+  │  • Pre/post      │   │  • SMT solving   │   │  • Per-function  │   │  • Merkle hash   │
+  │    conditions    │   │  • Type checking │   │    Z3 formulas   │   │    of results +  │
+  │  • Invariants    │   │  • Proof search  │   │    (.smt2)       │   │    specs + proofs│
+  │  • Ghost code    │   │  • 72/72 verified│   │  • Z3 proof terms│   │  • Timestamped   │
+  └──────────────────┘   │  • Spec manifest │   │    (.proof)      │   │    event log     │
+                         │  • SMT logs      │   │  • proofs.json   │   └──────────────────┘
+                         └──────────────────┘   └──────────────────┘           │
+                                                                               ▼
+                                                                       ┌──────────────────┐
+                                                                       │  PUBLIC BADGE    │
+                                                                       │  + HISTORY       │
+                                                                       │  + SPECS         │
+                                                                       │  + PROOF BUNDLE  │
+                                                                       │                  │
+                                                                       │  JSON endpoint   │
+                                                                       │  SVG artifact    │
+                                                                       └──────────────────┘
 ```
 
 </div>
@@ -127,18 +128,19 @@ fn binary_search(v: &Vec<i32>, key: i32) -> Option<usize>
 
 **Contract:** `Certify.sol` deployed on Ethereum
 
-We certify both the verification results and the specification manifest by hashing
-them into a Merkle root and recording that root on-chain:
+We certify the verification results, the specification manifest, and (when available)
+the Z3 proof index by hashing all artifacts into a Merkle root and recording that
+root on-chain:
 
 ```solidity
 function certifyWebsite(   // * name is historical; we're certifying JSON, not a website
     string calldata url,         // identifier (e.g., project URL or file reference)
-    bytes32 contentHash,         // Merkle root: keccak256(results_hash || specs_hash)
+    bytes32 contentHash,         // Merkle root: keccak256(results_hash || specs_hash [|| proofs_hash])
     string calldata description  // e.g., "pmemlog verification: 72/72"
 ) external {
     emit WebsiteCertified(
         keccak256(bytes(url)),   // Indexed for lookup
-        contentHash,             // Merkle root of results + specs
+        contentHash,             // Merkle root of results + specs + proofs
         msg.sender,              // BAIF Safe address
         url,
         description,
@@ -175,9 +177,23 @@ function certifyWebsite(   // * name is historical; we're certifying JSON, not a
 │                                               ▼                                 │
 │                                   specs_hash = keccak256(specs.json)            │
 │                                                                                 │
-│   MERKLE ROOT:                                                                  │
+│   INPUT 3: proofs.json (the evidence — Z3 formulas + proofs)    [when avail.]  │
 │   ┌───────────────────────────────────────────────────────────────────────────┐ │
-│   │  content_hash = keccak256(results_hash || specs_hash)                     │ │
+│   │ {                                                                         │ │
+│   │   "functions": {                                                          │ │
+│   │     "probe:pmemlog/.../check_crc()": {                                    │ │
+│   │       "z3_formula": { "file": "smt_queries/check_crc.smt2", ... },        │ │
+│   │       "z3_proof":   { "file": "z3_proofs/check_crc.proof", ... }          │ │
+│   │     }                                                                     │ │
+│   │   }                                                                       │ │
+│   │ }                                                                         │ │
+│   └───────────────────────────────────────────┬───────────────────────────────┘ │
+│                                               ▼                                 │
+│                                   proofs_hash = keccak256(proofs.json)          │
+│                                                                                 │
+│   MERKLE ROOT (3-leaf when proofs present, 2-leaf otherwise):                   │
+│   ┌───────────────────────────────────────────────────────────────────────────┐ │
+│   │  content_hash = keccak256(results_hash || specs_hash [|| proofs_hash])    │ │
 │   └───────────────────────────────────────────┬───────────────────────────────┘ │
 │                                               ▼                                 │
 │   ON-CHAIN: WebsiteCertified event                                              │
@@ -187,11 +203,12 @@ function certifyWebsite(   // * name is historical; we're certifying JSON, not a
 │   └───────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                 │
 │   Anyone can:                                                                   │
-│   1. Fetch results.json and specs.json from our repo                            │
+│   1. Fetch results.json, specs.json, and proofs.json from our repo              │
 │   2. Compute keccak256 of each file                                             │
 │   3. Verify each hash matches the recorded leaf hashes in history.json          │
-│   4. Verify keccak256(results_hash || specs_hash) == on-chain content_hash      │
+│   4. Verify Merkle root == on-chain content_hash                                │
 │   5. Read specs.json to judge: are these the properties that matter?            │
+│   6. Inspect Z3 formulas/proofs for verification evidence                       │
 │                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -289,15 +306,28 @@ cat certifications/project-id/results/latest.json | cast keccak
                                          │
                                          ▼
   ┌───────────────────────────────────────────────────────────────────────────────────┐
-  │ STEP 1: probe-verus/action@v1 + spec extraction                                   │
-  │ ────────────────────────────────────────────────                                   │
+  │ STEP 1: probe-verus/action@v1 + spec extraction + SMT logging                     │
+  │ ────────────────────────────────────────────────────────────                       │
   │ • Clone target repository                                                         │
   │ • Install Verus toolchain (version from Cargo.toml)                               │
   │ • Run: probe-verus atomize → atoms.json (function inventory)                      │
-  │ • Run: probe-verus verify  → results.json (verification status)                   │
+  │ • Run: probe-verus verify  → results.json + per-function .smt2 files              │
+  │   (with --log smt --log-dir ./verus-smt-logs -V spinoff-all)                      │
   │ • Run: probe-verus specify → specs.json (specification manifest)                  │
   │                                                                                   │
-  │ Outputs: results.json, specs.json, verified_count=72, total_functions=72          │
+  │ Outputs: results.json, specs.json, smt-log-dir, verified_count, total_functions   │
+  └───────────────────────────────────────────────────────────────────────────────────┘
+                                         │
+                                         ▼
+  ┌───────────────────────────────────────────────────────────────────────────────────┐
+  │ STEP 1.5: certify_cli generate-proofs (Z3 proof certificate generation)            │
+  │ ────────────────────────────────────────────────────────────                       │
+  │ • Map .smt2 files to verified functions (name normalisation + fuzzy matching)      │
+  │ • For each matched function: inject (set-option :proof true) + run Z3             │
+  │ • Collect Z3 proof terms → .proof files                                           │
+  │ • Build proofs.json (per-function: spec text, Z3 formula file, Z3 proof file)     │
+  │                                                                                   │
+  │ Outputs: proof-bundle-dir/ (proofs.json, smt_queries/, z3_proofs/)                │
   └───────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼
@@ -306,12 +336,13 @@ cat certifications/project-id/results/latest.json | cast keccak
   │ ──────────────────────────────────────────────                                    │
   │ • Compute: results_hash = keccak256(results.json)                                 │
   │ • Compute: specs_hash   = keccak256(specs.json)                                   │
-  │ • Compute: content_hash = keccak256(results_hash || specs_hash)                   │
+  │ • Compute: proofs_hash  = keccak256(proofs.json)   [when proof bundle present]    │
+  │ • Compute: content_hash = keccak256(results_hash || specs_hash [|| proofs_hash])  │
   │ • Build Safe transaction (if using multisig)                                      │
   │ • Sign with PRIVATE_KEY from GitHub Secrets                                       │
   │ • Submit content_hash to Ethereum (mainnet or Sepolia)                            │
   │                                                                                   │
-  │ Outputs: tx_hash, content_hash, results_hash, specs_hash                          │
+  │ Outputs: tx_hash, content_hash, results_hash, specs_hash, proofs_hash             │
   └───────────────────────────────────────────────────────────────────────────────────┘
                                          │
                                          ▼
@@ -323,6 +354,8 @@ cat certifications/project-id/results/latest.json | cast keccak
   │ • certifications/{project}/history.json → Append record (incl. Merkle hashes)     │
   │ • certifications/{project}/results/{timestamp}.json → Archive results             │
   │ • certifications/{project}/specs/{timestamp}.json   → Archive specs               │
+  │ • certifications/{project}/proofs/{timestamp}/      → Archive proof bundle        │
+  │   (proofs.json + smt_queries/ + z3_proofs/)                                       │
   │                                                                                   │
   │ Commit and push to repository                                                     │
   └───────────────────────────────────────────────────────────────────────────────────┘
@@ -354,7 +387,9 @@ cat certifications/project-id/results/latest.json | cast keccak
       "results_file": "results/2026-01-27T09-49-01Z.json",
       "results_hash": "0x... (keccak256 of results.json)",
       "specs_hash": "0x... (keccak256 of specs.json)",
-      "specs_file": "specs/2026-01-27T09-49-01Z.json"
+      "specs_file": "specs/2026-01-27T09-49-01Z.json",
+      "proof_bundle": "proofs/2026-01-27T09-49-01Z",
+      "proofs_hash": "0x... (keccak256 of proofs.json)"
     }
   ]
 }
@@ -367,6 +402,8 @@ cat certifications/project-id/results/latest.json | cast keccak
   each file hash can be recomputed from the archived files
 - **Spec inspectability:** Anyone can read `specs.json` to judge whether the
   proven properties are meaningful — without running Verus or reading source code
+- **Evidence inspectability:** Anyone can examine the Z3 formulas (`.smt2` files)
+  and proof terms (`.proof` files) for each verified function
 - **Spec stability:** Unchanged specs produce the same `specs_hash` across
   re-certifications, making spec evolution visible
 
@@ -432,6 +469,11 @@ cat certifications/project-id/results/latest.json | cast keccak
 │    • Sound with respect to Verus's axioms and Rust's semantics                  │
 │    • Complete for the specified properties (not "all correctness")              │
 │                                                                                 │
+│  Additionally, Z3 proof terms are now archived for each verified function:      │
+│    • .smt2 files show the exact formulas Z3 solved                              │
+│    • .proof files contain Z3's proof terms (legacy proof format)                │
+│    • As proof checkers mature, these become independently checkable              │
+│                                                                                 │
 │  Caveats:                                                                       │
 │    • Specifications themselves could be wrong (spec vs. intent)                 │
 │    • Assumes Verus/Z3 implementation is correct (trusted computing base)        │
@@ -483,28 +525,30 @@ cat certifications/project-id/results/latest.json | cast keccak
 │                                                                                     │
 │                           BAIF "CERTIFY" IN ONE DIAGRAM                             │
 │                                                                                     │
-│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐          │
-│   │             │    │             │    │             │    │             │          │
-│   │  Rust Code  │───▶│   Verus     │───▶│  Ethereum   │───▶│   Badge     │          │
-│   │  + Specs    │    │   Verifier  │    │  Mainnet    │    │   + JSON    │          │
-│   │             │    │             │    │             │    │             │          │
-│   └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘          │
+│   ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐        │
+│   │           │  │           │  │  Z3 Proof │  │           │  │           │        │
+│   │ Rust Code │─▶│   Verus   │─▶│ Extraction│─▶│ Ethereum  │─▶│   Badge   │        │
+│   │ + Specs   │  │ Verifier  │  │           │  │ Mainnet   │  │  + JSON   │        │
+│   │           │  │           │  │           │  │           │  │           │        │
+│   └───────────┘  └───────────┘  └───────────┘  └───────────┘  └───────────┘        │
 │                                                                                     │
-│        Input            Proof              Record            Display                │
+│       Input          Proof        Evidence          Record          Display         │
 │                                                                                     │
 │   ─────────────────────────────────────────────────────────────────────────────     │
 │                                                                                     │
 │   What we have:                                                                     │
 │   ✓ Mathematically verified (SMT-backed proofs)                                     │
-│   ✓ Cryptographically bound (keccak256 content hash)                                │
+│   ✓ Cryptographically bound (keccak256 Merkle root)                                 │
 │   ✓ Immutably recorded (Ethereum event logs)                                        │
 │   ✓ Independently verifiable (public RPC, open source)                              │
 │   ✓ CI/CD integrated (GitHub Actions workflows)                                     │
+│   ✓ Specs inspectable (spec manifests in the certificate)                           │
+│   ✓ Evidence archived (Z3 formulas + proof terms per function)                      │
 │                                                                                     │
 │   ─────────────────────────────────────────────────────────────────────────────     │
 │                                                                                     │
 │   What we're building toward:                                                       │
-│   ◐ Making specs inspectable (spec manifests — implemented)                         │
+│   ◐ Independent proof checking (Z3 proof checkers maturing)                         │
 │   ✗ A fully meaningful definition of "certify"                                      │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
@@ -521,10 +565,13 @@ cat certifications/project-id/results/latest.json | cast keccak
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                                                                                     │
-│    CURRENT STATE: "Certify" = "Verus ran successfully" + "here are the specs"       │
+│    CURRENT STATE: "Certify" = "Verus ran successfully"                              │
+│                             + "here are the specs"                                  │
+│                             + "here are the Z3 formulas and proof terms"            │
 │                                                                                     │
-│    We now include the specification manifest (the "theorem statements") as a        │
-│    first-class certified artifact, making the claim inspectable by anyone.          │
+│    We now include both the specification manifest (the "theorem statements")        │
+│    and the Z3 proof evidence as first-class certified artifacts, making both        │
+│    the claim and the evidence inspectable by anyone.                                │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -547,10 +594,12 @@ cat certifications/project-id/results/latest.json | cast keccak
 │   ─────────────────────────────────────────────────────────────────────────────     │
 │                                                                                     │
 │   BEFORE: "72/72 verified" — no way to know what those specs actually say           │
-│   NOW:    specs.json included — reviewers can read and judge the specs              │
+│   THEN:   specs.json included — reviewers can read and judge the specs              │
+│   NOW:    Z3 proofs included — reviewers can also inspect the evidence              │
 │                                                                                     │
-│   The certification proves "these specific properties hold." Whether they are       │
-│   the right properties is now an auditable question, not a hidden one.              │
+│   The certification proves "these specific properties hold." The evidence           │
+│   (Z3 formulas and proof terms) is now archived and will become independently       │
+│   checkable as proof-checking tools mature.                                         │
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -561,6 +610,7 @@ cat certifications/project-id/results/latest.json | cast keccak
 |-------|---------------|--------|
 | **L0: Mechanical** | Verus accepts the specs | ✓ We do this |
 | **L0.5: Inspectable** | Specs are published and hashed alongside results | ✓ Implemented (Merkle hashing) |
+| **L0.75: Evidenced** | Z3 formulas + proof terms archived per function | ✓ Implemented (proof bundles) |
 | **L1: Refinement** | Formal specs correctly refine informal requirements | ✗ Open problem |
 | **L2: Completeness** | Specs cover all security-relevant properties | ✗ Open problem |
 | **L3: Review** | Independent expert validated the refinement | ✗ Open problem |
@@ -568,10 +618,13 @@ cat certifications/project-id/results/latest.json | cast keccak
 **The honest statement:**
 
 > A BAIF certification now proves that *specific, inspectable properties were verified by Verus*,
-> and those properties are cryptographically bound to the on-chain record.
+> with Z3 formulas and proof terms archived as evidence, all cryptographically bound to the
+> on-chain record.
 > 
 > It does **not** yet prove those specs capture what users actually care about — but the specs
-> are now visible for anyone to judge. This is the key step from attestation toward certification.
+> and proof evidence are now visible for anyone to judge. The Z3 proofs are not yet independently
+> checkable by a small trusted kernel (as in Rocq/Lean), but they are archived and will become
+> verifiable as proof-checking tools mature.
 
 **Directions we're exploring (see `doc/toward_certification.md`):**
 
@@ -589,6 +642,6 @@ cat certifications/project-id/results/latest.json | cast keccak
 
 **Transforming software assurance from reputation-based to evidence-based.**
 
-*(The specs are now part of the evidence. What remains: ensuring the specs are the right ones.)*
+*(The specs and Z3 proofs are now part of the evidence. What remains: ensuring the specs are the right ones, and independent proof checking.)*
 
 </div>

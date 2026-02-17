@@ -62,6 +62,7 @@ A reusable composite GitHub Action that runs Verus formal verification on Rust p
 - `total-functions`: Total number of verifiable functions
 - `verus-version`: Verus version used for verification
 - `rust-version`: Rust toolchain version used
+- `smt-log-dir`: Path to SMT log directory (when `verus-args` includes `--log smt`)
 
 **Usage:**
 ```yaml
@@ -70,7 +71,11 @@ A reusable composite GitHub Action that runs Verus formal verification on Rust p
     project-path: '.'
     package: 'my-crate'
     output-dir: './output'
+    verus-args: '--log smt --log-dir ./verus-smt-logs -V spinoff-all'
 ```
+
+The `verus-args` input passes extra arguments to Verus. With `--log smt -V spinoff-all`,
+Verus produces per-function `.smt2` files (Z3 formulas) used for proof certificate generation.
 
 ---
 
@@ -81,7 +86,7 @@ A reusable composite GitHub Action that runs Verus formal verification on Rust p
 A reusable composite GitHub Action that certifies content hashes on Ethereum.
 
 **Features:**
-- Hashes verification results using keccak256
+- Hashes verification results using keccak256 (Merkle root of results, specs, and proofs)
 - Submits certification transaction to Ethereum
 - Supports both direct signing and Gnosis Safe multisig
 - Works with mainnet and Sepolia testnet
@@ -143,6 +148,12 @@ Allows BAIF to certify any external Verus project without requiring changes to t
 - `certifications/{project-id}/specs/` - Stored specification manifests
   - `{timestamp}.json` - Timestamped specs for each certification
   - `latest.json` - Most recent specification manifest
+- `certifications/{project-id}/proofs/` - Stored Z3 proof bundles
+  - `{timestamp}/` - Timestamped proof bundle for each certification
+    - `proofs.json` - Per-function index (spec, Z3 formula, Z3 proof)
+    - `smt_queries/*.smt2` - Z3 formulas (standard SMT-LIB2)
+    - `z3_proofs/*.proof` - Z3 proof terms
+  - `latest/` - Most recent proof bundle
 
 ---
 
@@ -225,7 +236,9 @@ Each certification is recorded in `history.json` with full traceability:
       "results_file": "results/2026-01-27T09-49-01Z.json",
       "results_hash": "0x...",
       "specs_hash": "0x...",
-      "specs_file": "specs/2026-01-27T09-49-01Z.json"
+      "specs_file": "specs/2026-01-27T09-49-01Z.json",
+      "proof_bundle": "proofs/2026-01-27T09-49-01Z",
+      "proofs_hash": "0x..."
     }
   ]
 }
@@ -236,7 +249,7 @@ Each certification is recorded in `history.json` with full traceability:
 - `ref`: Git ref (branch/tag/commit) that was certified
 - `network`: Ethereum network (`mainnet` or `sepolia`)
 - `tx_hash`: Transaction hash of the on-chain certification
-- `content_hash`: Keccak256 hash certified on-chain (Merkle root when specs are present)
+- `content_hash`: Keccak256 hash certified on-chain (Merkle root)
 - `etherscan_url`: Link to transaction on Etherscan
 - `verified`/`total`: Verification statistics
 - `verus_version`: Verus toolchain version used
@@ -245,30 +258,45 @@ Each certification is recorded in `history.json` with full traceability:
 - `results_hash`: keccak256 of results.json (Merkle leaf)
 - `specs_hash`: keccak256 of specs.json (Merkle leaf)
 - `specs_file`: Path to stored specification manifest
+- `proof_bundle`: Path to stored Z3 proof bundle directory
+- `proofs_hash`: keccak256 of proofs.json (Merkle leaf, when proofs are present)
 
-**Merkle hashing:** When specs are available, the on-chain `content_hash` is a
-Merkle root: `keccak256(results_hash || specs_hash)`. Both leaf hashes are stored
-in `history.json` so each artifact can be verified independently. When specs are
-not available (older certifications), `content_hash` is simply `keccak256(results.json)`.
+**Merkle hashing:** The on-chain `content_hash` is a Merkle root of up to three
+leaves: `keccak256(results_hash || specs_hash [|| proofs_hash])`. When Z3 proofs
+are available, the tree has three leaves; otherwise it falls back to two
+(`results_hash || specs_hash`) or one (legacy `keccak256(results.json)`).
+All leaf hashes are stored in `history.json` for independent verification.
 
-### Results & Specs Storage
+### Results, Specs & Proofs Storage
 
-Full verification results and specification manifests are stored for each certification:
+Full verification results, specification manifests, and Z3 proof bundles are stored
+for each certification:
 - `results/{timestamp}.json` - Immutable verification results per certification
 - `results/latest.json` - Most recent verification results
 - `specs/{timestamp}.json` - Immutable specification manifest per certification
 - `specs/latest.json` - Most recent specification manifest
+- `proofs/{timestamp}/` - Immutable Z3 proof bundle per certification
+  - `proofs.json` - Per-function index mapping to Z3 formula and proof files
+  - `smt_queries/*.smt2` - Z3 formulas in standard SMT-LIB2 format
+  - `z3_proofs/*.proof` - Z3 proof terms (legacy proof format)
+- `proofs/latest/` - Most recent proof bundle
 
 The specification manifest (produced by `probe-verus specify`) contains the
 pre/postconditions for each verified function, making the "theorem statements"
 inspectable without reading source code.
+
+The proof bundle (produced by `certify_cli generate-proofs`) contains the Z3
+formulas sent to the solver and the proof terms returned, making the verification
+*evidence* inspectable alongside the theorem statements.
 
 This enables:
 - Full reproducibility of verification
 - Historical comparison of results across versions
 - Audit trail of what was verified
 - Independent review of what properties were proven (via specs)
+- Inspection of *how* properties were proven (via Z3 formulas and proof terms)
 - Tracking spec stability across re-certifications (same `specs_hash` = unchanged specs)
+- Retrospective proof checking as Z3 proof checkers mature
 
 ---
 
@@ -282,18 +310,32 @@ This enables:
                                         │
                                         ▼
 ╭───────────────────────────────────────────────────────────────────────────╮
-│  🔍 STEP 1: VERIFICATION + SPEC EXTRACTION                                │
+│  🔍 STEP 1: VERIFICATION + SPEC EXTRACTION + SMT LOGGING                  │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │  probe-verus/action@v1                                              │  │
+│  │  probe-verus/action@v1  (with verus-args: --log smt -V spinoff-all)│  │
 │  │  ├── Install Verus toolchain                                        │  │
 │  │  ├── Run probe-verus atomize → atoms.json                           │  │
-│  │  └── Run probe-verus verify  → results.json                         │  │
+│  │  └── Run probe-verus verify  → results.json + per-function .smt2    │  │
 │  │                                                                     │  │
 │  │  probe-verus specify (post-action step)                             │  │
 │  │  └── Extract specs from source + atoms.json → specs.json            │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
-│  📤 Outputs: results.json, specs.json, verified_count, total_functions   │
+│  📤 Outputs: results.json, specs.json, smt-log-dir, counts              │
+╰───────────────────────────────────────────────────────────────────────────╯
+                                        │
+                                        ▼
+╭───────────────────────────────────────────────────────────────────────────╮
+│  🔐 STEP 1.5: Z3 PROOF CERTIFICATE GENERATION                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  certify_cli generate-proofs                                        │  │
+│  │  ├── Map .smt2 files → verified functions (name normalisation)      │  │
+│  │  ├── For each function: inject (set-option :proof true) + run Z3    │  │
+│  │  ├── Collect Z3 proof terms → .proof files                          │  │
+│  │  └── Build proofs.json (per-function: spec, formula, proof)         │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                           │
+│  📤 Outputs: proof-bundle-dir/ (proofs.json, smt_queries/, z3_proofs/)   │
 ╰───────────────────────────────────────────────────────────────────────────╯
                                         │
                                         ▼
@@ -303,20 +345,22 @@ This enables:
 │  │  certify_cli certify                                                │  │
 │  │  ├── results_hash = keccak256(results.json)                         │  │
 │  │  ├── specs_hash   = keccak256(specs.json)                           │  │
-│  │  ├── content_hash = keccak256(results_hash || specs_hash)           │  │
+│  │  ├── proofs_hash  = keccak256(proofs.json)   [when available]       │  │
+│  │  ├── content_hash = keccak256(results || specs [|| proofs])         │  │
 │  │  ├── Submit content_hash to Certify.sol contract                    │  │
 │  │  └── Via Gnosis Safe multisig (optional)                            │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
-│  📤 Outputs: tx_hash, content_hash, results_hash, specs_hash             │
+│  📤 Outputs: tx_hash, content_hash, results_hash, specs_hash,           │
+│              proofs_hash                                                   │
 ╰───────────────────────────────────────────────────────────────────────────╯
                                         │
                     ┌───────────┬───────┼───────┬───────────┐
                     ▼           ▼       ▼       ▼           ▼
-          ┌──────────────┐ ┌────────┐ ┌────────┐ ┌──────────────┐
-          │ 📁 badge.svg │ │📁 hist │ │📁 res/ │ │  📁 specs/   │
-          │ 📁 badge.json│ │  .json │ │ latest │ │  latest.json │
-          └──────────────┘ └────────┘ └────────┘ └──────────────┘
+          ┌──────────────┐ ┌────────┐ ┌────────┐ ┌──────────┐ ┌───────────┐
+          │ 📁 badge.svg │ │📁 hist │ │📁 res/ │ │📁 specs/ │ │📁 proofs/ │
+          │ 📁 badge.json│ │  .json │ │ latest │ │ latest   │ │ latest/   │
+          └──────────────┘ └────────┘ └────────┘ └──────────┘ └───────────┘
                           │             │             │
                           └─────────────┼─────────────┘
                                         ▼
@@ -331,11 +375,12 @@ This enables:
 ### Flow Summary
 
 ```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  Rust Code   │───▶│    Verus     │───▶│   Ethereum   │───▶│    Badge     │
-│  + Proofs    │    │  Verifier    │    │  Blockchain  │    │   Display    │
-└──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
-     Source           Formal Proof       Immutable Record     Public Trust
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  Rust Code   │───▶│    Verus     │───▶│  Z3 Proof    │───▶│   Ethereum   │───▶│    Badge     │
+│  + Specs     │    │  Verifier    │    │  Extraction  │    │  Blockchain  │    │   Display    │
+└──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
+     Source           SMT Solving         Proof Terms         Immutable           Public Trust
+                    + Spec Extract       per Function          Record
 ```
 
 ---
@@ -357,15 +402,19 @@ eth_certify/
 │       ├── results/        # Stored verification results
 │       │   ├── {timestamp}.json
 │       │   └── latest.json
-│       └── specs/          # Stored specification manifests
-│           ├── {timestamp}.json
-│           └── latest.json
+│       ├── specs/          # Stored specification manifests
+│       │   ├── {timestamp}.json
+│       │   └── latest.json
+│       └── proofs/         # Stored Z3 proof bundles
+│           ├── {timestamp}/  # proofs.json + smt_queries/ + z3_proofs/
+│           └── latest/       # Most recent proof bundle
 ├── certify_cli/            # Python CLI for certification
-│   ├── __main__.py
+│   ├── __main__.py         # CLI entry point (certify, generate-proofs, update-registry)
 │   ├── config.py           # Supports CERTIFY_SPECS_SOURCE for Merkle hashing
 │   ├── deploy.py           # Merkle-style hashing when specs are present
-│   ├── foundry.py          # compute_merkle_content_hash()
-│   ├── registry.py         # Badge, history, results & specs archiving
+│   ├── foundry.py          # compute_merkle_content_hash() (2- or 3-leaf Merkle)
+│   ├── proofs.py           # Z3 proof certificate pipeline (SMT parsing, proof gen)
+│   ├── registry.py         # Badge, history, results, specs & proof bundle archiving
 │   ├── safe.py
 │   └── verify.py
 ├── doc/
