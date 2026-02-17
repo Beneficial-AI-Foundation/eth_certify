@@ -119,22 +119,24 @@ The hash is a Merkle root of up to three leaves — results, specs, and (when av
 ```
 
 ```solidity
-function certifyWebsite(
-    string calldata url,          // project identifier
+function certify(
+    string calldata identifier,   // project id, e.g. "owner/repo"
     bytes32 contentHash,          // Merkle root: keccak256(results_hash || specs_hash [|| proofs_hash])
+    bytes32 commitHash,           // git commit SHA as bytes32
     string calldata description   // "pmemlog: 72/72 verified"
-) external {
-    emit WebsiteCertified(
-        keccak256(bytes(url)),    // indexed for lookup
-        contentHash,              // Merkle root
-        msg.sender,               // BAIF Safe address
-        url, description,
-        block.timestamp
+) external onlyAuthorized {
+    emit Certified(
+        keccak256(bytes(identifier)),  // indexed for lookup
+        contentHash,                   // Merkle root
+        msg.sender,                    // BAIF Safe address
+        identifier, commitHash, description,
+        SCHEMA_VERSION, block.timestamp
     );
 }
 ```
 
-**Stateless** — emits events only, no storage, no admin, no upgrades.
+**Stateless** — emits events only, no storage, no upgrades.
+**Access controlled** — only `AUTHORIZED_CERTIFIER` (BAIF Safe) can call.
 One transaction, one gas cost. All leaf hashes stored in `history.json`.
 
 ---
@@ -288,12 +290,13 @@ commit hashes, transaction hashes, and Etherscan links.
 
 | Threat | Mitigation |
 |---|---|
-| Fake certification | Only Safe key holders can certify; sender recorded in event |
+| Fake certification | Contract enforces `AUTHORIZED_CERTIFIER` (immutable); only BAIF Safe can call `certify()` |
 | Tampered results | keccak256 hash on-chain; any change produces different hash |
 | Deleted certification | Ethereum events are append-only; always queryable |
 | Backdated certification | Block timestamp from consensus; infeasible to forge |
-| Key compromise | Gnosis Safe enables key rotation without changing identity |
-| Contract vulnerability | Minimal contract — events only, no state, no admin |
+| Key compromise | Gnosis Safe enables key rotation; keys passed via env vars (not CLI args) |
+| SSRF via content source | URL validation blocks private/loopback IPs; only http/https; no redirects |
+| Contract vulnerability | Minimal contract — events only, no state, single function, on-chain access control |
 
 ---
 
@@ -301,11 +304,13 @@ commit hashes, transaction hashes, and Etherscan links.
 
 | Component | Network | Address |
 |---|---|---|
-| Certify Contract | Mainnet | `0x4f2a70eC878E9Adae88FF0c7528ebEbf83dFD83c` |
-| Certify Contract | Sepolia | `0x125721f8a45bbABC60aDbaaF102a94d9cae59238` |
+| Certify Contract (v2) | Mainnet | `0x7774c8804a462bB7d5D33f2ad4fcc4A6FC67d399` |
+| Certify Contract (v2) | Sepolia | `0x7a1bdfE0F2F9B4110301371Fa26BB3a4719b2A9F` |
 | BAIF Safe | Mainnet | `0x8EAb4dB55DCEfb6D8bF76e1C6132d48D2048ef0e` |
 
-All contract source code is verified on Etherscan.
+All contract source code is verified on Etherscan. The v2 contract enforces
+on-chain access control: only the `AUTHORIZED_CERTIFIER` (BAIF Safe) can
+call `certify()`.
 
 ---
 

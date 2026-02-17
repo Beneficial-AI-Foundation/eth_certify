@@ -133,17 +133,19 @@ the Z3 proof index by hashing all artifacts into a Merkle root and recording tha
 root on-chain:
 
 ```solidity
-function certifyWebsite(   // * name is historical; we're certifying JSON, not a website
-    string calldata url,         // identifier (e.g., project URL or file reference)
+function certify(
+    string calldata identifier,  // project id, e.g. "owner/repo"
     bytes32 contentHash,         // Merkle root: keccak256(results_hash || specs_hash [|| proofs_hash])
+    bytes32 commitHash,          // git commit SHA as bytes32
     string calldata description  // e.g., "pmemlog verification: 72/72"
-) external {
-    emit WebsiteCertified(
-        keccak256(bytes(url)),   // Indexed for lookup
-        contentHash,             // Merkle root of results + specs + proofs
-        msg.sender,              // BAIF Safe address
-        url,
+) external onlyAuthorized {      // only AUTHORIZED_CERTIFIER (BAIF Safe) can call
+    emit Certified(
+        keccak256(bytes(identifier)),  // Indexed for lookup
+        contentHash,                   // Merkle root of results + specs + proofs
+        msg.sender,                    // BAIF Safe address
+        identifier, commitHash,
         description,
+        SCHEMA_VERSION,
         block.timestamp
     );
 }
@@ -196,7 +198,7 @@ function certifyWebsite(   // * name is historical; we're certifying JSON, not a
 │   │  content_hash = keccak256(results_hash || specs_hash [|| proofs_hash])    │ │
 │   └───────────────────────────────────────────┬───────────────────────────────┘ │
 │                                               ▼                                 │
-│   ON-CHAIN: WebsiteCertified event                                              │
+│   ON-CHAIN: Certified event                                                     │
 │   ┌───────────────────────────────────────────────────────────────────────────┐ │
 │   │  topics[2] = content_hash (Merkle root)                                   │ │
 │   │  sender    = 0x8EAb4dB55DCEfb6D8bF76e1C6132d48D...  (BAIF Safe)           │ │
@@ -213,8 +215,9 @@ function certifyWebsite(   // * name is historical; we're certifying JSON, not a
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> \* The function is named `certifyWebsite` for historical reasons. A more accurate name 
-> would be `certifyContent` since we're hashing a JSON file, not a website.
+> The v2 contract uses a single `certify()` function with on-chain access control
+> (`AUTHORIZED_CERTIFIER` immutable). It also records the git commit hash and a
+> schema version in the event for future-proofing.
 
 **Why blockchain (specifically Ethereum)?**
 
@@ -260,11 +263,11 @@ function certifyWebsite(   // * name is historical; we're certifying JSON, not a
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  ETHEREUM EVENT LOG                                                         │
 │                                                                             │
-│  topics[0]: 0xe902b6df... (WebsiteCertified signature)                      │
-│  topics[1]: keccak256(url)                                                  │
+│  topics[0]: Certified event signature                                       │
+│  topics[1]: keccak256(identifier)                                           │
 │  topics[2]: contentHash                                                     │
 │  topics[3]: sender (Safe address)                                           │
-│  data: url, description, timestamp (ABI-encoded)                            │
+│  data: identifier, commitHash, description, schemaVersion, timestamp        │
 │                                                                             │
 │  Queryable forever via eth_getLogs                                          │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -421,8 +424,8 @@ cat certifications/project-id/results/latest.json | cast keccak
 ┌────────────────────────────────┬─────────────────────────────────────────────────┐
 │  THREAT                        │  MITIGATION                                     │
 ├────────────────────────────────┼─────────────────────────────────────────────────┤
-│  Fake certification            │  Only holders of Safe keys can certify;         │
-│  (unauthorized party)          │  sender address recorded in event               │
+│  Fake certification            │  Contract enforces AUTHORIZED_CERTIFIER         │
+│  (unauthorized party)          │  (immutable); only BAIF Safe can call certify() │
 ├────────────────────────────────┼─────────────────────────────────────────────────┤
 │  Tampered results              │  keccak256 hash committed on-chain;             │
 │  (modified after cert)         │  any change produces different hash             │
@@ -434,10 +437,15 @@ cat certifications/project-id/results/latest.json | cast keccak
 │  (false timeline)              │  economically infeasible to forge               │
 ├────────────────────────────────┼─────────────────────────────────────────────────┤
 │  Key compromise                │  Gnosis Safe enables key rotation               │
-│  (stolen private key)          │  without changing public identity               │
+│  (stolen private key)          │  without changing public identity;              │
+│                                │  keys passed via env vars (not CLI args)        │
+├────────────────────────────────┼─────────────────────────────────────────────────┤
+│  SSRF via content source       │  URL validation blocks private/loopback IPs;    │
+│  (malicious URL in CI)         │  only http/https; no automatic redirects        │
 ├────────────────────────────────┼─────────────────────────────────────────────────┤
 │  Contract vulnerability        │  Minimal contract (events only);                │
-│                                │  no state, no admin, no upgrades                │
+│                                │  no state, no admin, no upgrades;               │
+│                                │  single function, on-chain access control       │
 └────────────────────────────────┴─────────────────────────────────────────────────┘
 ```
 
