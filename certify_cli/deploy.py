@@ -43,8 +43,11 @@ def deploy_contract(
     if not authorized_address:
         # Default: deployer's own address (useful for local testing)
         from eth_account import Account
+
         authorized_address = Account.from_key(private_key).address
-        print(f"No --authorized-address given; defaulting to deployer: {authorized_address}")
+        print(
+            f"No --authorized-address given; defaulting to deployer: {authorized_address}"
+        )
 
     print(f"Authorized certifier: {authorized_address}")
 
@@ -59,25 +62,32 @@ def deploy_contract(
         rpc_url,
     ]
 
-    # Add verification flags for Etherscan-supported networks if API key is available
-    if env.etherscan_api_key and network in (Network.MAINNET, Network.SEPOLIA):
-        args.extend(["--verify", "--etherscan-api-key", env.etherscan_api_key])
-
     # Pass private key via environment variable (not CLI arg) to avoid
     # leaking it in the process list (/proc/<pid>/cmdline).
     result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
 
-    if result.success:
+    if not result.success:
         return DeployResult(
-            success=True,
-            message=(
-                "✅ Deploy complete!\n"
-                "👉 Copy the deployed address and add it to .env as CERTIFY_ADDRESS"
-            ),
+            success=False,
+            message=f"❌ Deploy failed:\n{result.stderr}",
         )
+
+    # Note: Etherscan verification is done manually after deployment
+    # since we need the deployed address from the broadcast output.
+    if env.etherscan_api_key and network in (Network.MAINNET, Network.SEPOLIA):
+        print(
+            f"Tip: verify on Etherscan with:\n"
+            f"  forge verify-contract <ADDRESS> src/Certify.sol:Certify "
+            f"--chain {network.value} --etherscan-api-key <KEY> "
+            f"--constructor-args 0x{'0' * 24}{authorized_address[2:].lower()}"
+        )
+
     return DeployResult(
-        success=False,
-        message=f"❌ Deploy failed:\n{result.stderr}",
+        success=True,
+        message=(
+            "✅ Deploy complete!\n"
+            "👉 Copy the deployed address and add it to .env as CERTIFY_ADDRESS"
+        ),
     )
 
 

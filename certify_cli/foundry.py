@@ -145,10 +145,13 @@ def _validate_url(url: str) -> None:
     try:
         for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
             addr = ipaddress.ip_address(info[4][0])
-            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-                raise ValueError(
-                    f"URL resolves to blocked address {addr}: {url}"
-                )
+            if (
+                addr.is_private
+                or addr.is_loopback
+                or addr.is_link_local
+                or addr.is_reserved
+            ):
+                raise ValueError(f"URL resolves to blocked address {addr}: {url}")
     except socket.gaierror as exc:
         raise ValueError(f"Cannot resolve hostname '{hostname}': {exc}") from exc
 

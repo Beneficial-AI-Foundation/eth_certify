@@ -10,7 +10,6 @@ from .foundry import (
     cast_block_number,
     cast_keccak,
     cast_logs,
-    cast_to_dec,
     compute_content_hash,
 )
 
@@ -21,14 +20,18 @@ from .foundry import (
 #           string description, uint8 schemaVersion, uint256 timestamp)
 EVENT_SIGNATURE = "0x"  # Placeholder — computed below
 
+
 def _compute_event_signature() -> str:
     """Compute keccak256 of the Certified event signature."""
     from .foundry import cast_keccak
+
     sig = "Certified(bytes32,bytes32,address,string,bytes32,string,uint8,uint256)"
     return cast_keccak(sig.encode())
 
+
 # Lazy initialization to avoid calling cast at import time
 _EVENT_SIG_CACHE: str | None = None
+
 
 def _get_event_signature() -> str:
     global _EVENT_SIG_CACHE, EVENT_SIGNATURE
@@ -36,6 +39,7 @@ def _get_event_signature() -> str:
         _EVENT_SIG_CACHE = _compute_event_signature()
         EVENT_SIGNATURE = _EVENT_SIG_CACHE
     return _EVENT_SIG_CACHE
+
 
 # Default values
 DEFAULT_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
@@ -189,7 +193,9 @@ def _fetch_certification(
     current_block = cast_block_number(rpc_url)
     from_block = current_block - DEFAULT_BLOCK_LOOKBACK
 
-    logs = cast_logs(rpc_url, contract_address, _get_event_signature(), url_hash, from_block)
+    logs = cast_logs(
+        rpc_url, contract_address, _get_event_signature(), url_hash, from_block
+    )
 
     if not logs:
         return None

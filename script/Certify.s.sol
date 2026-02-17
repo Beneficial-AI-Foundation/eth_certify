@@ -13,7 +13,8 @@ import {Certify} from "../src/Certify.sol";
 ///   Private key: set ETH_PRIVATE_KEY env var (not --private-key).
 contract DeployCertify is Script {
     function run(address _authorizedCertifier) public returns (Certify) {
-        vm.startBroadcast();
+        uint256 deployerKey = vm.envUint("ETH_PRIVATE_KEY");
+        vm.startBroadcast(deployerKey);
         Certify certify = new Certify(_authorizedCertifier);
         vm.stopBroadcast();
 
@@ -40,7 +41,8 @@ contract CertifyDirect is Script {
         bytes32 commitHash,
         string calldata description
     ) public {
-        vm.startBroadcast();
+        uint256 deployerKey = vm.envUint("ETH_PRIVATE_KEY");
+        vm.startBroadcast(deployerKey);
         Certify(contractAddr).certify(identifier, contentHash, commitHash, description);
         vm.stopBroadcast();
 
