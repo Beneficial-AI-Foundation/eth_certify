@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from .envelope import unwrap_envelope
+
 
 # ---------------------------------------------------------------------------
 # SMT file parsing and function-name extraction
@@ -384,10 +386,10 @@ def build_proofs_json(
         "verification_result": "unsat"
     }
     """
-    # Load results and specs
-    results = json.loads(results_path.read_text())
+    # Load results and specs (unwrap Schema 2.0 envelope if present)
+    results = unwrap_envelope(json.loads(results_path.read_text()))
     specs = (
-        json.loads(specs_path.read_text())
+        unwrap_envelope(json.loads(specs_path.read_text()))
         if specs_path and specs_path.exists()
         else None
     )
@@ -432,7 +434,7 @@ def build_proofs_json(
         if specs and probe_key in specs:
             spec_data = specs[probe_key]
             entry["verus_spec"] = {
-                "mode": spec_data.get("mode", "unknown"),
+                "kind": spec_data.get("kind", spec_data.get("mode", "unknown")),
             }
             if spec_data.get("requires_text"):
                 entry["verus_spec"]["requires_text"] = spec_data["requires_text"]

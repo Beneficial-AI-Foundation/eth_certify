@@ -52,8 +52,8 @@ A reusable composite GitHub Action that runs Verus formal verification on Rust p
 - Installs all required tooling (Rust, Verus, verus-analyzer, SCIP, probe-verus)
 - Caches dependencies for faster subsequent runs
 - Runs `probe-verus atomize` to extract verifiable functions
-- Runs `probe-verus verify` to perform formal verification
-- Handles both results.json formats (dictionary with verified boolean, and summary object)
+- Runs `probe-verus verify` (unified pipeline) to perform formal verification
+- Handles Schema 2.0 enveloped and bare results.json formats
 
 **Outputs:**
 - `results-file`: Path to verification results JSON
@@ -66,7 +66,7 @@ A reusable composite GitHub Action that runs Verus formal verification on Rust p
 
 **Usage:**
 ```yaml
-- uses: Beneficial-AI-Foundation/probe-verus/action@v1
+- uses: Beneficial-AI-Foundation/probe-verus/action@v3
   with:
     project-path: '.'
     package: 'my-crate'
@@ -312,7 +312,7 @@ This enables:
 ╭───────────────────────────────────────────────────────────────────────────╮
 │  🔍 STEP 1: VERIFICATION + SPEC EXTRACTION + SMT LOGGING                  │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │  probe-verus/action@v1  (with verus-args: --log smt -V spinoff-all)│  │
+│  │  probe-verus/action@v3  (with verus-args: --log smt -V spinoff-all)│  │
 │  │  ├── Install Verus toolchain                                        │  │
 │  │  ├── Run probe-verus atomize → atoms.json                           │  │
 │  │  └── Run probe-verus verify  → results.json + per-function .smt2    │  │

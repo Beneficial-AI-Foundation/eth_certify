@@ -228,7 +228,7 @@ Two main workflows:
 
 | Step | What happens | Tool |
 |---|---|---|
-| **Verify** | Install Verus, run `probe-verus verify` with SMT logging → `results.json` + `.smt2` files | `probe-verus/action@v1` |
+| **Verify** | Install Verus, run `probe-verus verify` (unified pipeline) → `results.json` + `.smt2` files | `probe-verus/action@v3` |
 | **Specify** | Extract specs from source → `specs.json` | `probe-verus specify` |
 | **Proofs** | Map functions to `.smt2`, run Z3 with proof production → proof bundle | `certify_cli generate-proofs` |
 | **Certify** | Merkle hash (results + specs + proofs) → sign via Gnosis Safe → submit to Ethereum | `certify_cli certify` |
@@ -749,11 +749,11 @@ Detailed workflow steps
 
 # Certification — Step 1: Verify (with SMT Logging)
 
-Uses the `probe-verus/action@v1` reusable action with extra Verus flags:
+Uses the `probe-verus/action@v3` reusable action with extra Verus flags:
 
 ```yaml
 - name: Run Verus verification (with SMT logging)
-  uses: beneficial-ai-foundation/probe-verus/action@v1
+  uses: beneficial-ai-foundation/probe-verus/action@v3
   with:
     project-path: target/${{ inputs.project_path }}
     package: ${{ inputs.package }}
@@ -764,7 +764,7 @@ Uses the `probe-verus/action@v1` reusable action with extra Verus flags:
 **What it does:**
 - Installs the Verus toolchain (version from `Cargo.toml`)
 - Runs `probe-verus atomize` → function inventory
-- Runs `probe-verus verify` → `results.json`
+- Runs `probe-verus verify` (unified pipeline: atomize + specify + run-verus) → `results.json`
 - `--log smt -V spinoff-all` → per-function `.smt2` files in `verus-smt-logs/`
 
 **Outputs:** `verified-count`, `total-functions`, `verus-version`, `rust-version`, `smt-log-dir`
@@ -891,7 +891,7 @@ matching the expected content hash.
 
 ```yaml
 - name: Run fresh Verus verification
-  uses: beneficial-ai-foundation/probe-verus/action@v1
+  uses: beneficial-ai-foundation/probe-verus/action@v3
   with:
     project-path: target/${{ inputs.project_path }}
 ```

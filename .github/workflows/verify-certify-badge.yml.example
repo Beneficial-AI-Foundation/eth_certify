@@ -31,7 +31,7 @@ jobs:
       # STEP 1: Run Verus Verification
       # ═══════════════════════════════════════════════════════════════
       - name: Run Verus verification
-        uses: beneficial-ai-foundation/probe-verus/action@v1
+        uses: beneficial-ai-foundation/probe-verus/action@v3
         id: verify
         with:
           project-path: .  # or ./my-verus-crate for workspaces

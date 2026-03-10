@@ -127,7 +127,7 @@ jobs:
 This action pairs well with the [probe-verus action](https://github.com/beneficial-ai-foundation/probe-verus) for certifying formal verification results:
 
 ```yaml
-- uses: beneficial-ai-foundation/probe-verus/action@v1
+- uses: beneficial-ai-foundation/probe-verus/action@v3
   id: verify
   with:
     project-path: ./my-verus-crate

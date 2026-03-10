@@ -252,7 +252,7 @@ jobs:
           echo "full_sha=$ACTUAL_SHA" >> $GITHUB_OUTPUT
 
       - name: Run fresh Verus verification
-        uses: beneficial-ai-foundation/probe-verus/action@v1
+        uses: beneficial-ai-foundation/probe-verus/action@v3
         id: fresh-verify
         with:
           project-path: target/${{ inputs.project_path }}

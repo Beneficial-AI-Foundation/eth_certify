@@ -307,7 +307,7 @@ uv run python -m certify_cli verify-hash <content_hash> --network sepolia
                                          │
                                          ▼
   ┌───────────────────────────────────────────────────────────────────────────────────┐
-  │ STEP 1: probe-verus/action@v1 + spec extraction + SMT logging                     │
+  │ STEP 1: probe-verus/action@v3 + spec extraction + SMT logging                     │
   │ ────────────────────────────────────────────────────────────                       │
   │ • Clone target repository                                                         │
   │ • Install Verus toolchain (version from Cargo.toml)                               │

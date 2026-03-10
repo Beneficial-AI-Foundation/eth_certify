@@ -116,7 +116,7 @@ jobs:
       # STEP 1: Run Verus Verification + Spec Extraction
       # ═══════════════════════════════════════════════════════════════
       - name: Run Verus verification (with SMT logging)
-        uses: beneficial-ai-foundation/probe-verus/action@v1
+        uses: beneficial-ai-foundation/probe-verus/action@v3
         id: verify
         with:
           project-path: target/${{ inputs.project_path }}
@@ -173,15 +173,17 @@ jobs:
           
           if [ -f "$SPECS_FILE" ]; then
             echo "specs_file=$(realpath "$SPECS_FILE")" >> $GITHUB_OUTPUT
-            SPEC_COUNT=$(jq 'length' "$SPECS_FILE")
+            # Schema 2.0: unwrap .data envelope if present
+            D='if .data then .data else . end'
+            SPEC_COUNT=$(jq "($D) | length" "$SPECS_FILE")
             echo "Specs extracted: $SPEC_COUNT functions"
             
             # Extract taxonomy summary if spec-labels are present
-            LABELED=$(jq '[.[] | select(."spec-labels" and (."spec-labels" | length > 0))] | length' "$SPECS_FILE")
+            LABELED=$(jq "[($D) | .[] | select(.\"spec-labels\" and (.\"spec-labels\" | length > 0))] | length" "$SPECS_FILE")
             if [ "$LABELED" -gt 0 ]; then
               echo "Classified: $LABELED / $SPEC_COUNT functions"
               # Build label counts
-              LABEL_SUMMARY=$(jq -r '[.[].["spec-labels"] // [] | .[]] | group_by(.) | map("\(length) \(.[0])") | join(", ")' "$SPECS_FILE")
+              LABEL_SUMMARY=$(jq -r "[($D) | .[].\"spec-labels\" // [] | .[]] | group_by(.) | map(\"\(length) \(.[0])\") | join(\", \")" "$SPECS_FILE")
               echo "Labels:     $LABEL_SUMMARY"
               echo "taxonomy_summary=$LABEL_SUMMARY" >> $GITHUB_OUTPUT
             fi
@@ -280,7 +282,7 @@ jobs:
         working-directory: certify
         run: |
           # Create certify.conf
-          RESULTS_PATH="$(realpath ../output/results.json)"
+          RESULTS_PATH="${{ steps.verify.outputs.results-file }}"
           SPECS_FILE="${{ steps.specify.outputs.specs_file }}"
           PROOF_BUNDLE_DIR="${{ steps.proofs.outputs.proof_bundle_dir }}"
           

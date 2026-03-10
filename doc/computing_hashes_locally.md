@@ -4,7 +4,7 @@ The hashes are **computed from the output files** (`results.json`, `specs.json`,
 
 ## The Output Files
 
-The probe-verus action produces:
+The probe-verus action (`beneficial-ai-foundation/probe-verus/action@v3`) produces:
 
 - `./output/atoms.json` -- function inventory (NOT hashed, intermediate only)
 - `./output/results.json` -- verification results (this gets hashed as `results_hash`)
@@ -13,6 +13,8 @@ Additional steps produce:
 
 - `./output/specs.json` -- from `probe-verus specify` (hashed as `specs_hash`)
 - `./output/proof-bundle/proofs.json` -- from `certify_cli generate-proofs` (hashed as `proofs_hash`, currently optional)
+
+Since probe-verus v2.0.0, all JSON outputs are wrapped in a **Schema 2.0 metadata envelope** (`{"tool":..., "source":..., "data":...}`). The hash is computed on the **full file** (including envelope), not just the `data` payload. Certify's Python code uses `unwrap_envelope()` from `certify_cli/envelope.py` when it needs to parse the data payload.
 
 ## How to Compute Hashes Locally
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+from .envelope import unwrap_envelope
 from .foundry import cast_keccak, strip_0x
 
 
@@ -330,12 +331,18 @@ def extract_taxonomy(
     if not full_specs.exists():
         return None
 
-    specs = json.loads(full_specs.read_text())
-    if not isinstance(specs, list):
+    specs = unwrap_envelope(json.loads(full_specs.read_text()))
+
+    # specs may be a dict keyed by probe-name (v1.x+) or a list of entries
+    if isinstance(specs, dict):
+        items = specs.values()
+    elif isinstance(specs, list):
+        items = specs
+    else:
         return None
 
     counter: Counter[str] = Counter()
-    for item in specs:
+    for item in items:
         labels = item.get("spec-labels") or []
         counter.update(labels)
 
