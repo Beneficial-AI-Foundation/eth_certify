@@ -1,0 +1,37 @@
+(:max-memory   21.56
+ :memory       21.56
+ :num-allocs   718459
+ :rlimit-count 10837)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x7883 ((_ extract 7 7) byte31_before@)))
+ (let (($x7967 (= ?x7883 (_ bv0 1))))
+ (let ((?x7935 ((_ zero_extend 7) (_ bv0 1))))
+ (let ((?x7932 ((_ zero_extend 5) (_ bv7 3))))
+ (let ((?x7933 (bvlshr byte31_before@ ?x7932)))
+ (let (($x7936 (= ?x7933 ?x7935)))
+ (let (($x7977 (and $x7967 true)))
+ (let ((?x7958 ((_ extract 7 1) (_ bv0 8))))
+ (let (($x7959 (= (_ bv0 7) ?x7958)))
+ (let (($x7957 (= ?x7883 ((_ extract 0 0) (_ bv0 8)))))
+ (let (($x7960 (and $x7957 $x7959)))
+ (let ((@x7976 (trans (monotonicity (rewrite (= ?x7958 (_ bv0 7))) (= $x7959 (= (_ bv0 7) (_ bv0 7)))) (rewrite (= (= (_ bv0 7) (_ bv0 7)) true)) (= $x7959 true))))
+ (let ((@x7983 (trans (monotonicity (rewrite (= $x7957 $x7967)) @x7976 (= $x7960 $x7977)) (rewrite (= $x7977 $x7967)) (= $x7960 $x7967))))
+ (let ((@x7879 (rewrite (= (concat (_ bv0 7) (_ bv0 1)) (_ bv0 8)))))
+ (let ((@x7942 (rewrite (= (concat (_ bv0 5) (_ bv7 3)) (_ bv7 8)))))
+ (let ((@x7903 (monotonicity (trans (rewrite (= ?x7932 (concat (_ bv0 5) (_ bv7 3)))) @x7942 (= ?x7932 (_ bv7 8))) (= ?x7933 (bvlshr byte31_before@ (_ bv7 8))))))
+ (let ((@x7893 (trans @x7903 (rewrite (= (bvlshr byte31_before@ (_ bv7 8)) (concat (_ bv0 7) ?x7883))) (= ?x7933 (concat (_ bv0 7) ?x7883)))))
+ (let ((@x7955 (monotonicity @x7893 (trans (rewrite (= ?x7935 (concat (_ bv0 7) (_ bv0 1)))) @x7879 (= ?x7935 (_ bv0 8))) (= $x7936 (= (concat (_ bv0 7) ?x7883) (_ bv0 8))))))
+ (let ((@x7964 (trans @x7955 (rewrite (= (= (concat (_ bv0 7) ?x7883) (_ bv0 8)) $x7960)) (= $x7936 $x7960))))
+ (let ((@x7986 (mp (asserted $x7936) (trans @x7964 @x7983 (= $x7936 $x7967)) $x7967)))
+ (let ((@x37949 ((_ th-lemma bv) (symm (mp @x7986 (rewrite (= $x7967 $x7967)) $x7967) (= (_ bv0 1) ?x7883)) (not (= ((_ extract 7 7) byte31_before@) (_ bv1 1))))))
+ (let (($x37187 (= ((_ extract 7 7) byte31_before@) (_ bv1 1))))
+ (let (($x7993 (bvule (_ bv128 8) byte31_before@)))
+ (let (($x8006 (not (or (not %%location_label%%0) (not $x7993)))))
+ (let ((@x8009 (rewrite (= (not (=> %%location_label%%0 (bvult byte31_before@ (_ bv128 8)))) $x8006))))
+ (let ((@x7995 (mp (asserted (not (=> %%location_label%%0 (bvult byte31_before@ (_ bv128 8))))) @x8009 $x8006)))
+ (let ((@x7997 (not-or-elim @x7995 $x7993)))
+ (let ((@x37952 (unit-resolution ((_ th-lemma bv) (or (not $x7993) $x37187)) (mp @x7997 (rewrite (= $x7993 $x7993)) $x7993) $x37187)))
+ (unit-resolution @x37952 @x37949 false)))))))))))))))))))))))))))))))
+

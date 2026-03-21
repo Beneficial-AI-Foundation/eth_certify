@@ -1,0 +1,25 @@
+(:max-memory   23.79
+ :memory       23.79
+ :num-allocs   1948710
+ :rlimit-count 48473)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x35998 (concat (_ bv0 1) (bvmul (_ bv16 13) (concat (_ bv0 9) ((_ extract 7 4) b@))))))
+ (let ((?x35952 ((_ extract 3 0) b@)))
+ (let ((?x35977 (concat (_ bv0 10) ?x35952)))
+ (let ((?x35934 (concat (_ bv0 6) b@)))
+ (let (($x36035 (= ?x35934 (bvadd ?x35977 ?x35998))))
+ (let (($x36008 (not $x36035)))
+ (let (($x36006 (not (or (not %%location_label%%0) $x36035))))
+ (let ((?x35925 ((_ zero_extend 5) (ite (= (_ bv16 5) (_ bv0 5)) tmp$$$$bitvectmp3 (bvudiv b@ ((_ zero_extend 3) (_ bv16 5)))))))
+ (let ((?x35920 ((_ zero_extend 6) (ite (= (_ bv16 5) (_ bv0 5)) tmp$$$$bitvectmp1 (bvurem b@ ((_ zero_extend 3) (_ bv16 5)))))))
+ (let (($x35929 (= ((_ zero_extend 6) b@) (bvadd ?x35920 ((_ zero_extend 1) (bvmul ((_ zero_extend 8) (_ bv16 5)) ?x35925))))))
+ (let (($x35931 (not (=> %%location_label%%0 $x35929))))
+ (let ((@x36037 (mp (asserted $x35931) (rewrite (= $x35931 $x36006)) $x36006)))
+ (let ((@x36010 (not-or-elim @x36037 $x36008)))
+ (let ((@x50252 (mp (mp @x36010 (rewrite (= $x36008 $x36008)) $x36008) (monotonicity (rewrite (= $x36035 $x36035)) (= $x36008 $x36008)) $x36008)))
+ (let ((@x23 (true-axiom true)))
+ (let (($x993709 (or $x36035 false false false false false false false false false false false false false false)))
+ (unit-resolution ((_ th-lemma bv) $x993709) @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x50252 false)))))))))))))))))))
+

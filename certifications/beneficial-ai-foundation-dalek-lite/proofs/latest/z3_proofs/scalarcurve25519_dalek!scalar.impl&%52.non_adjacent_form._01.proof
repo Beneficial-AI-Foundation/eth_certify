@@ -1,0 +1,35 @@
+(:max-memory   24.00
+ :memory       24.00
+ :num-allocs   2116172
+ :rlimit-count 53751)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x38696 (bvadd (_ bv64 33) (bvmul (_ bv8589934591 33) (concat (_ bv0 1) bit_idx@)))))
+ (let ((?x38704 ((_ extract 32 32) ?x38696)))
+ (let ((?x38705 (concat ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38704 ?x38696)))
+ (let ((?x38710 (bvshl (_ bv0 64) ?x38705)))
+ (let ((?x38665 (concat (_ bv0 32) bit_idx@)))
+ (let ((?x38669 (bvlshr w3@ ?x38665)))
+ (let ((?x38681 (bvor ?x38669 ?x38710)))
+ (let (($x1008666 (= ?x38669 ?x38681)))
+ (let (($x1008672 (not $x1008666)))
+ (let ((@x1008674 (monotonicity (symm (commutativity (= $x1008666 (= ?x38681 ?x38669))) (= (= ?x38681 ?x38669) $x1008666)) (= (not (= ?x38681 ?x38669)) $x1008672))))
+ (let (($x38711 (= ?x38681 ?x38669)))
+ (let (($x38682 (not $x38711)))
+ (let (($x53638 (= $x38682 $x38682)))
+ (let ((@x54156 (rewrite (= ?x38704 ?x38704))))
+ (let ((@x54157 (monotonicity @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 @x54156 (rewrite (= ?x38696 ?x38696)) (= ?x38705 ?x38705))))
+ (let ((@x54163 (monotonicity (monotonicity (monotonicity @x54157 (= ?x38710 ?x38710)) (= ?x38681 ?x38681)) (= $x38711 $x38711))))
+ (let (($x38699 (not (or (not %%location_label%%0) $x38711))))
+ (let ((?x38542 (bvlshr w3@ ((_ zero_extend 32) bit_idx@))))
+ (let ((?x38434 (bvshl ((_ zero_extend 63) (_ bv0 1)) ((_ sign_extend 31) (bvsub ((_ zero_extend 26) (_ bv64 7)) ((_ zero_extend 1) bit_idx@))))))
+ (let (($x38524 (not (=> %%location_label%%0 (= (bvor ?x38542 ?x38434) ?x38542)))))
+ (let ((@x38713 (mp (asserted $x38524) (rewrite (= $x38524 $x38699)) $x38699)))
+ (let ((@x38687 (not-or-elim @x38713 $x38682)))
+ (let ((@x1008675 (mp (mp (mp @x38687 (rewrite $x53638) $x38682) (monotonicity @x54163 $x53638) $x38682) @x1008674 $x1008672)))
+ (let ((@x23 (true-axiom true)))
+ (let (($x1008676 (or $x1008666 false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false)))
+ (let ((@x1008678 (unit-resolution ((_ th-lemma bv) $x1008676) @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 @x23 $x1008666)))
+ (unit-resolution @x1008678 @x1008675 false)))))))))))))))))))))))))))))
+

@@ -22,13 +22,13 @@ Add this to your project's README:
 
 ## Latest Certification
 
-- **Verified**: 1106/1151 functions
+- **Verified**: 1150/1199 functions
 - **Ref**: main
-- **Commit**: [`b99d7ad`](https://github.com/Beneficial-AI-Foundation/dalek-lite/commit/b99d7ad74a3a8ff0066065ffb0cdc327fa49e08d)
+- **Commit**: [`d26bf6e`](https://github.com/Beneficial-AI-Foundation/dalek-lite/commit/d26bf6e6315633cff1ca6ed1efd163946531cc8e)
 - **Network**: sepolia
-- **Transaction**: [0xf40caf3877c6fe2d085e6ee3541e9efc460907de79ccd7064dba4395f5f40dab](https://sepolia.etherscan.io/tx/0xf40caf3877c6fe2d085e6ee3541e9efc460907de79ccd7064dba4395f5f40dab)
-- **Content Hash**: `0xa7ecc0db1d211bbffaf101cfb1ef95740932afd3fc4e979c8972e9ecb1139c39`
-- **Results**: [results/2026-03-10T14-47-49Z.json](results/2026-03-10T14-47-49Z.json)
+- **Transaction**: [0x21ca7ea857698f0e0a820b6fe0bc82318fb23473c273d628987e837b795279df](https://sepolia.etherscan.io/tx/0x21ca7ea857698f0e0a820b6fe0bc82318fb23473c273d628987e837b795279df)
+- **Content Hash**: `0x1d853323b138a02c05bb112b69e48f91889b6c9e855eb51500cde587aba26df1`
+- **Results**: [results/2026-03-21T09-04-25Z.json](results/2026-03-21T09-04-25Z.json)
 
 ### Toolchain
 - **Verus**: 0.2026.01.14.88f7396

@@ -1,0 +1,34 @@
+(:max-memory   21.66
+ :memory       21.66
+ :num-allocs   753656
+ :rlimit-count 11496)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x9588 ((_ zero_extend 63) (_ bv1 1))))
+ (let ((?x9585 ((_ zero_extend 58) (_ bv63 6))))
+ (let ((?x9587 (bvlshr old_borrow! ?x9585)))
+ (let (($x9589 (bvule ?x9587 ?x9588)))
+ (let (($x9590 (=> %%location_label%%0 $x9589)))
+ (let (($x9592 (not $x9590)))
+ (let ((?x9632 ((_ extract 0 0) (_ bv1 64))))
+ (let ((?x9539 ((_ extract 63 63) old_borrow!)))
+ (let ((?x9534 (concat (_ bv0 63) ?x9539)))
+ (let ((?x9633 ((_ extract 0 0) ?x9534)))
+ (let (($x9634 (bvule ?x9633 ?x9632)))
+ (let (($x9636 (= ((_ extract 63 1) ?x9534) (_ bv0 63))))
+ (let (($x9637 (and $x9636 $x9634)))
+ (let ((@x9656 (monotonicity (rewrite (= ?x9633 ?x9539)) (rewrite (= ?x9632 (_ bv1 1))) (= $x9634 (bvule ?x9539 (_ bv1 1))))))
+ (let ((@x9649 (trans (monotonicity (rewrite $x9636) (= $x9636 (= (_ bv0 63) (_ bv0 63)))) (rewrite (= (= (_ bv0 63) (_ bv0 63)) true)) (= $x9636 true))))
+ (let ((@x9663 (monotonicity @x9649 (trans @x9656 (rewrite (= (bvule ?x9539 (_ bv1 1)) true)) (= $x9634 true)) (= $x9637 (and true true)))))
+ (let ((@x9667 (trans @x9663 (rewrite (= (and true true) true)) (= $x9637 true))))
+ (let ((@x9626 (rewrite (= (concat (_ bv0 63) (_ bv1 1)) (_ bv1 64)))))
+ (let ((@x9598 (rewrite (= (concat (_ bv0 58) (_ bv63 6)) (_ bv63 64)))))
+ (let ((@x9537 (monotonicity (trans (rewrite (= ?x9585 (concat (_ bv0 58) (_ bv63 6)))) @x9598 (= ?x9585 (_ bv63 64))) (= ?x9587 (bvlshr old_borrow! (_ bv63 64))))))
+ (let ((@x9530 (trans @x9537 (rewrite (= (bvlshr old_borrow! (_ bv63 64)) ?x9534)) (= ?x9587 ?x9534))))
+ (let ((@x9631 (monotonicity @x9530 (trans (rewrite (= ?x9588 (concat (_ bv0 63) (_ bv1 1)))) @x9626 (= ?x9588 (_ bv1 64))) (= $x9589 (bvule ?x9534 (_ bv1 64))))))
+ (let ((@x9669 (trans (trans @x9631 (rewrite (= (bvule ?x9534 (_ bv1 64)) $x9637)) (= $x9589 $x9637)) @x9667 (= $x9589 true))))
+ (let ((@x9676 (trans (monotonicity @x9669 (= $x9590 (=> %%location_label%%0 true))) (rewrite (= (=> %%location_label%%0 true) true)) (= $x9590 true))))
+ (let ((@x9683 (trans (monotonicity @x9676 (= $x9592 (not true))) (rewrite (= (not true) false)) (= $x9592 false))))
+ (mp (asserted $x9592) @x9683 false))))))))))))))))))))))))))))
+
