@@ -38,6 +38,11 @@ on:
         options:
           - mainnet
           - sepolia
+      verus_version:
+        description: 'Verus release version (e.g. v0.2025.2.24). Required if the target Cargo.toml lacks [package.metadata.verus] release.'
+        required: false
+        default: ''
+        type: string
       taxonomy_config:
         description: 'Path to spec taxonomy TOML (relative to project root). Auto-detects spec-taxonomy.toml if left empty.'
         required: false
@@ -116,11 +121,12 @@ jobs:
       # STEP 1: Run Verus Verification + Spec Extraction
       # ═══════════════════════════════════════════════════════════════
       - name: Run Verus verification (with SMT logging)
-        uses: beneficial-ai-foundation/probe-verus/action@v3
+        uses: beneficial-ai-foundation/probe-verus/action@v4
         id: verify
         with:
           project-path: target/${{ inputs.project_path }}
           package: ${{ inputs.package }}
+          verus-version: ${{ inputs.verus_version }}
           output-dir: ./output
           verus-args: '--log smt --log-dir ./verus-smt-logs -V spinoff-all'
 
