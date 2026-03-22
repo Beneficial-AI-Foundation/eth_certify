@@ -1,0 +1,18 @@
+(:max-memory   23.96
+ :memory       23.96
+ :num-allocs   2019349
+ :rlimit-count 52614)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x1366954 (Poly%curve25519_dalek!edwards.CompressedEdwardsY. self!)))
+ (let ((?x1366959 (curve25519_dalek!edwards.CompressedEdwardsY./CompressedEdwardsY/0 (%Poly%curve25519_dalek!edwards.CompressedEdwardsY. ?x1366954))))
+ (let (($x1366960 (= result! ?x1366959)))
+ (let (($x1366962 (=> %%location_label%%0 $x1366960)))
+ (let (($x1366963 (=> (and $x1366960 %%location_label%%0) $x1366960)))
+ (let (($x1366964 (not $x1366963)))
+ (let ((@x1366972 (monotonicity (rewrite (= $x1366962 (or (not %%location_label%%0) $x1366960))) (= $x1366963 (=> $x1366960 (or (not %%location_label%%0) $x1366960))))))
+ (let ((@x1366976 (trans @x1366972 (rewrite (= (=> $x1366960 (or (not %%location_label%%0) $x1366960)) true)) (= $x1366963 true))))
+ (let ((@x1366983 (trans (monotonicity @x1366976 (= $x1366964 (not true))) (rewrite (= (not true) false)) (= $x1366964 false))))
+ (mp (asserted $x1366964) @x1366983 false))))))))))))
+
