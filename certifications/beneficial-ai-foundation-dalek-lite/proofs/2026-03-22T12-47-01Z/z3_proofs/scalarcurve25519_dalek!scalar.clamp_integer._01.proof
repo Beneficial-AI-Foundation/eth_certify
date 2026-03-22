@@ -1,0 +1,27 @@
+(:max-memory   24.21
+ :memory       24.21
+ :num-allocs   2288943
+ :rlimit-count 56957)
+(:version "4.12.5")
+unsat
+((declare-fun k!2720 () (_ BitVec 5))
+(proof
+(let ((?x40533 ((_ extract 2 0) r0@)))
+ (let (($x40580 (= ?x40533 (_ bv0 3))))
+ (let ((?x58475 (concat k!2720 (_ bv0 3))))
+ (let (($x58481 (= r0@ ?x58475)))
+ (let ((?x40469 ((_ extract 7 3) b0@)))
+ (let ((?x40491 (concat ?x40469 (_ bv0 3))))
+ (let (($x40493 (= r0@ ?x40491)))
+ (let ((@x40457 (mp (asserted (= r0@ (bvand b0@ (_ bv248 8)))) (rewrite (= (= r0@ (bvand b0@ (_ bv248 8))) $x40493)) $x40493)))
+ (let ((@x58484 (mp (mp @x40457 (rewrite (= $x40493 $x40493)) $x40493) (rewrite (= $x40493 $x58481)) $x58481)))
+ (let ((@x1008203 (symm @x58484 (= ?x58475 r0@))))
+ (let ((@x1008215 ((_ th-lemma bv) ((_ th-lemma bv) @x1008203 (not (= ((_ extract 0 0) r0@) (_ bv1 1)))) ((_ th-lemma bv) @x1008203 (not (= ((_ extract 1 1) r0@) (_ bv1 1)))) ((_ th-lemma bv) @x1008203 (not (= ((_ extract 2 2) r0@) (_ bv1 1)))) (= (_ bv0 3) ?x40533))))
+ (let (($x40508 (not $x40580)))
+ (let (($x40608 (not (or (not %%location_label%%0) $x40580))))
+ (let (($x40499 (=> %%location_label%%0 (= (bvand r0@ ((_ zero_extend 5) (_ bv7 3))) ((_ zero_extend 7) (_ bv0 1))))))
+ (let (($x40500 (not $x40499)))
+ (let ((@x40504 (mp (asserted $x40500) (rewrite (= $x40500 $x40608)) $x40608)))
+ (let ((@x40509 (not-or-elim @x40504 $x40508)))
+ (unit-resolution (mp @x40509 (rewrite (= $x40508 $x40508)) $x40508) (symm @x1008215 $x40580) false))))))))))))))))))))
+

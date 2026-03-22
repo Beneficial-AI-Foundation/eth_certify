@@ -1,0 +1,325 @@
+# Certify External Verus Projects (v2 — Python-backed)
+#
+# Uses certify_cli --json output piped through workflow helper scripts.
+# All business logic lives in certify_cli; scripts handle only:
+#   - probe-verus extract output parsing (resolve_extract.py)
+#   - JSON-to-GITHUB_OUTPUT bridging (workflow_utils.py)
+#   - GITHUB_STEP_SUMMARY markdown (certify_summary.py)
+#
+# The original certify-external-extract.yml is preserved as a backup.
+
+name: Certify External Project (v2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'GitHub repository URL (e.g., https://github.com/owner/repo)'
+        required: true
+        type: string
+      project_path:
+        description: 'Path to Verus project within repo (default: . for root)'
+        required: false
+        default: '.'
+        type: string
+      package:
+        description: 'Package name for workspace projects (optional)'
+        required: false
+        default: ''
+        type: string
+      ref:
+        description: 'Git ref to certify (branch, tag, or commit SHA)'
+        required: false
+        default: 'main'
+        type: string
+      network:
+        description: 'Ethereum network for certification'
+        required: false
+        default: 'mainnet'
+        type: choice
+        options:
+          - mainnet
+          - sepolia
+      verus_version:
+        description: 'Verus release version (e.g. v0.2025.2.24). Auto-detected from Cargo.toml if left empty.'
+        required: false
+        default: ''
+        type: string
+      taxonomy_config:
+        description: 'Path to spec taxonomy TOML (relative to project root). Auto-detects spec-taxonomy.toml if left empty.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  certify-external:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout certify repo
+        uses: actions/checkout@v4
+        with:
+          path: certify
+          submodules: recursive
+
+      - name: Parse repository info
+        id: repo
+        run: |
+          python3 certify/.github/scripts/workflow_utils.py parse-repo \
+            "${{ inputs.repo_url }}" >> $GITHUB_OUTPUT
+
+      - name: Checkout target project
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.repo.outputs.repo_path }}
+          ref: ${{ inputs.ref }}
+          path: target
+
+      - name: Get commit SHA
+        id: commit
+        working-directory: target
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      # ═══════════════════════════════════════════════════════════════
+      # Common tooling
+      # ═══════════════════════════════════════════════════════════════
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install certify dependencies
+        working-directory: certify
+        run: uv sync
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1: Run probe-verus extract (unified pipeline)
+      # ═══════════════════════════════════════════════════════════════
+      - name: Run probe-verus extract
+        uses: beneficial-ai-foundation/probe-verus/action-extract@v5
+        id: extract
+        with:
+          project-path: target/${{ inputs.project_path }}
+          package: ${{ inputs.package }}
+          verus-version: ${{ inputs.verus_version }}
+          taxonomy-config: ${{ inputs.taxonomy_config }}
+          output-dir: ./output
+          verus-args: '--log smt --log-dir ./verus-smt-logs -V spinoff-all'
+
+      - name: Resolve extract output paths
+        id: outputs
+        run: |
+          python3 certify/.github/scripts/resolve_extract.py \
+            --summary-file "${{ steps.extract.outputs.extract-summary-file }}" \
+            --extract-file "${{ steps.extract.outputs.extract-file }}" \
+            >> $GITHUB_OUTPUT
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1b: Generate Z3 proof certificates
+      # ═══════════════════════════════════════════════════════════════
+      - name: Generate Z3 proof certificates
+        id: proofs
+        working-directory: certify
+        run: |
+          PROJECT_PATH="../target/${{ inputs.project_path }}"
+          SMT_LOG_DIR="$PROJECT_PATH/verus-smt-logs"
+
+          if [ ! -d "$SMT_LOG_DIR" ]; then
+            echo "::warning::SMT log directory not found at $SMT_LOG_DIR — skipping proof generation"
+            echo "proof_bundle_dir=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          SMT_COUNT=$(ls "$SMT_LOG_DIR"/*.smt2 2>/dev/null | wc -l)
+          if [ "$SMT_COUNT" -eq 0 ]; then
+            echo "::warning::No .smt2 files found — skipping proof generation"
+            echo "proof_bundle_dir=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          Z3_BIN="$HOME/.cargo/bin/verus-x86-linux/z3"
+          if [ ! -x "$Z3_BIN" ]; then
+            Z3_BIN="z3"
+          fi
+
+          RESULTS_FILE="${{ steps.outputs.outputs.results_file }}"
+          SPECS_FILE="${{ steps.outputs.outputs.specs_file }}"
+
+          SPECS_ARG=""
+          if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
+            SPECS_ARG="--specs-file $SPECS_FILE"
+          fi
+
+          uv run python -m certify_cli generate-proofs \
+            --smt-log-dir "$SMT_LOG_DIR" \
+            --results-file "$RESULTS_FILE" \
+            --output-dir ./output/proof-bundle \
+            --z3-binary "$Z3_BIN" \
+            --timeout 300 \
+            $SPECS_ARG \
+            --json \
+          | python3 .github/scripts/workflow_utils.py json-to-output \
+            proof_bundle_dir \
+          >> $GITHUB_OUTPUT
+
+      - name: Verification summary
+        run: |
+          SPECS_FLAG=""
+          if [ -n "${{ steps.outputs.outputs.specs_file }}" ]; then
+            SPECS_FLAG="--specs"
+          fi
+          PROOF_FLAG=""
+          if [ -n "${{ steps.proofs.outputs.proof_bundle_dir }}" ]; then
+            PROOF_FLAG="--proof-bundle"
+          fi
+
+          python3 certify/.github/scripts/certify_summary.py \
+            --phase verification \
+            --repo "${{ steps.repo.outputs.repo_path }}" \
+            --ref "${{ inputs.ref }}" \
+            --commit "${{ steps.commit.outputs.sha }}" \
+            --verified "${{ steps.extract.outputs.verified-count }}" \
+            --total "${{ steps.extract.outputs.total-functions }}" \
+            --taxonomy "${{ steps.outputs.outputs.taxonomy_summary }}" \
+            $SPECS_FLAG $PROOF_FLAG \
+          >> $GITHUB_STEP_SUMMARY
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 2: Certify on Ethereum
+      # ═══════════════════════════════════════════════════════════════
+      - name: Certify on ${{ inputs.network }}
+        id: certify
+        working-directory: certify
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          MAINNET_PRIVATE_KEY: ${{ secrets.MAINNET_PRIVATE_KEY }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          CERTIFY_ADDRESS: ${{ inputs.network == 'mainnet' && vars.MAINNET_CERTIFIER_ADDRESS || vars.SEPOLIA_CERTIFIER_ADDRESS }}
+        run: |
+          NETWORK="${{ inputs.network }}"
+          RESULTS_FILE="${{ steps.outputs.outputs.results_file }}"
+          SPECS_FILE="${{ steps.outputs.outputs.specs_file }}"
+          COMMIT_SHA="${{ steps.commit.outputs.sha }}"
+
+          SPECS_ARG=""
+          if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
+            SPECS_ARG="--specs-source $SPECS_FILE"
+          fi
+
+          SAFE_ARGS=""
+          if [ "$NETWORK" = "mainnet" ]; then
+            SAFE_ADDR="${{ vars.MAINNET_SAFE_ADDRESS }}"
+            SAFE_ARGS="--safe $SAFE_ADDR --execute"
+          fi
+
+          DESCRIPTION="BAIF Certification: ${{ steps.repo.outputs.repo_path }}@${{ inputs.ref }} - ${{ steps.extract.outputs.verified-count }}/${{ steps.extract.outputs.total-functions }} verified"
+
+          JSON_OUT=$(uv run python -m certify_cli certify \
+            --source "$RESULTS_FILE" \
+            --description "$DESCRIPTION" \
+            --network "$NETWORK" \
+            --commit-sha "$COMMIT_SHA" \
+            $SPECS_ARG $SAFE_ARGS \
+            --json)
+
+          echo "$JSON_OUT" | python3 .github/scripts/workflow_utils.py json-to-output \
+            tx_hash content_hash results_hash specs_hash etherscan_url \
+          >> $GITHUB_OUTPUT
+
+          TX_HASH=$(echo "$JSON_OUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tx_hash',''))")
+          if [ -z "$TX_HASH" ] || [ "$TX_HASH" = "None" ]; then
+            echo "::error::Certification failed - no transaction hash"
+            exit 1
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 3: Update Certification Registry
+      # ═══════════════════════════════════════════════════════════════
+      - name: Update certification registry
+        working-directory: certify
+        run: |
+          VERUS_VERSION="${{ steps.extract.outputs.verus-version }}"
+          RUST_VERSION="${{ steps.extract.outputs.rust-version }}"
+          RESULTS_FILE="${{ steps.outputs.outputs.results_file }}"
+          SPECS_FILE="${{ steps.outputs.outputs.specs_file }}"
+          PROOF_BUNDLE_DIR="${{ steps.proofs.outputs.proof_bundle_dir }}"
+
+          CMD="uv run python -m certify_cli update-registry"
+          CMD="$CMD --cert-id \"${{ steps.repo.outputs.cert_id }}\""
+          CMD="$CMD --repo \"${{ steps.repo.outputs.repo_path }}\""
+          CMD="$CMD --ref \"${{ inputs.ref }}\""
+          CMD="$CMD --network \"${{ inputs.network }}\""
+          CMD="$CMD --verified \"${{ steps.extract.outputs.verified-count }}\""
+          CMD="$CMD --total \"${{ steps.extract.outputs.total-functions }}\""
+          CMD="$CMD --tx-hash \"${{ steps.certify.outputs.tx_hash }}\""
+          CMD="$CMD --content-hash \"${{ steps.certify.outputs.content_hash }}\""
+          CMD="$CMD --commit-sha \"${{ steps.commit.outputs.sha }}\""
+
+          if [ -n "$VERUS_VERSION" ]; then
+            CMD="$CMD --verus-version \"$VERUS_VERSION\""
+          fi
+          if [ -n "$RUST_VERSION" ]; then
+            CMD="$CMD --rust-version \"$RUST_VERSION\""
+          fi
+          if [ -n "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
+            CMD="$CMD --results-file \"$RESULTS_FILE\""
+          fi
+
+          RESULTS_HASH="${{ steps.certify.outputs.results_hash }}"
+          SPECS_HASH="${{ steps.certify.outputs.specs_hash }}"
+
+          if [ -n "$RESULTS_HASH" ] && [ "$RESULTS_HASH" != "None" ]; then
+            CMD="$CMD --results-hash \"$RESULTS_HASH\""
+          fi
+          if [ -n "$SPECS_HASH" ] && [ "$SPECS_HASH" != "None" ]; then
+            CMD="$CMD --specs-hash \"$SPECS_HASH\""
+          fi
+          if [ -n "$SPECS_FILE" ] && [ -f "$SPECS_FILE" ]; then
+            CMD="$CMD --specs-file \"$SPECS_FILE\""
+          fi
+          if [ -n "$PROOF_BUNDLE_DIR" ] && [ -d "$PROOF_BUNDLE_DIR" ]; then
+            CMD="$CMD --proof-bundle-dir \"$PROOF_BUNDLE_DIR\""
+          fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Commit certification
+        working-directory: certify
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add certifications/
+
+          if ! git diff --cached --quiet; then
+            git commit -m "cert: ${{ steps.repo.outputs.repo_path }}@${{ inputs.ref }} (${{ steps.extract.outputs.verified-count }}/${{ steps.extract.outputs.total-functions }})"
+            git push
+            echo "Certification committed"
+          else
+            echo "No changes to commit"
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 4: Summary
+      # ═══════════════════════════════════════════════════════════════
+      - name: Final summary
+        run: |
+          python3 certify/.github/scripts/certify_summary.py \
+            --phase final \
+            --repo "${{ steps.repo.outputs.repo_path }}" \
+            --cert-id "${{ steps.repo.outputs.cert_id }}" \
+            --tx-hash "${{ steps.certify.outputs.tx_hash }}" \
+            --etherscan-url "${{ steps.certify.outputs.etherscan_url }}" \
+            --taxonomy "${{ steps.outputs.outputs.taxonomy_summary }}" \
+          >> $GITHUB_STEP_SUMMARY

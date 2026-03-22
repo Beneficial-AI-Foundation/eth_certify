@@ -100,8 +100,10 @@ class CertifyResult:
     content_hash: str
     contract_address: str
     message: str
-    results_hash: Optional[str] = None  # Set when Merkle hashing is used
-    specs_hash: Optional[str] = None  # Set when Merkle hashing is used
+    results_hash: Optional[str] = None
+    specs_hash: Optional[str] = None
+    tx_hash: Optional[str] = None
+    etherscan_url: Optional[str] = None
 
 
 def certify_content(
@@ -206,8 +208,8 @@ def certify_content(
     result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
 
     if result.success:
-        # Extract transaction hash from broadcast file
         tx_hash = _extract_tx_hash_from_broadcast(network)
+        etherscan_url = _build_etherscan_url(network, tx_hash)
         tx_info = f"\n   Tx Hash: {tx_hash}" if tx_hash else ""
 
         merkle_info = ""
@@ -231,6 +233,8 @@ def certify_content(
             ),
             results_hash=results_hash,
             specs_hash=specs_hash,
+            tx_hash=tx_hash,
+            etherscan_url=etherscan_url,
         )
     return CertifyResult(
         success=False,
@@ -239,6 +243,20 @@ def certify_content(
         contract_address=env.certify_address,
         message=f"❌ Certification failed:\n{result.stderr}",
     )
+
+
+def _build_etherscan_url(network: Network, tx_hash: Optional[str]) -> Optional[str]:
+    """Build Etherscan URL for a transaction hash."""
+    if not tx_hash:
+        return None
+    base = {
+        Network.MAINNET: "https://etherscan.io",
+        Network.SEPOLIA: "https://sepolia.etherscan.io",
+    }
+    host = base.get(network)
+    if not host:
+        return None
+    return f"{host}/tx/{tx_hash}"
 
 
 def _extract_tx_hash_from_broadcast(network: Network) -> Optional[str]:
@@ -419,6 +437,7 @@ def _execute_safe_certification(
     )
 
     if result.success:
+        etherscan_url = _build_etherscan_url(network, result.tx_hash)
         return CertifyResult(
             success=True,
             url=source,
@@ -432,6 +451,8 @@ def _execute_safe_certification(
                 f"   Safe: {safe_address}\n"
                 f"   {result.message}"
             ),
+            tx_hash=result.tx_hash,
+            etherscan_url=etherscan_url,
         )
     return CertifyResult(
         success=False,

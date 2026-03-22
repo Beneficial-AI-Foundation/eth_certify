@@ -1,5 +1,6 @@
 """Verify a stored certification: registry lookup, hash checks, Merkle structure, proof bundle."""
 
+import hashlib
 import json
 import sys
 from collections import Counter
@@ -264,11 +265,20 @@ def verify_merkle_structure(
     )
 
 
+def _file_sha256(path: Path) -> str:
+    """Compute SHA-256 hash of a file, matching proofs.py::file_hash format."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return "0x" + h.hexdigest()
+
+
 def verify_proof_bundle(
     cert_dir: Path,
     cert_entry: dict[str, Any],
 ) -> CheckResult:
-    """Check that all files referenced in proofs.json are present."""
+    """Check that all files referenced in proofs.json are present and hashes match."""
     proof_bundle = cert_entry.get("proof_bundle")
     if not proof_bundle:
         return CheckResult(status="skip", detail="no proof bundle recorded")
@@ -285,32 +295,54 @@ def verify_proof_bundle(
 
     missing_formulas = 0
     missing_proofs = 0
+    hash_mismatches: list[str] = []
     has_formula = 0
     has_proof = 0
 
-    for entry in proofs.values():
-        formula_file = (entry.get("z3_formula") or {}).get("file")
-        proof_file = (entry.get("z3_proof") or {}).get("file")
+    for func_name, entry in proofs.items():
+        formula_obj = entry.get("z3_formula") or {}
+        proof_obj = entry.get("z3_proof") or {}
+        formula_file = formula_obj.get("file")
+        proof_file = proof_obj.get("file")
 
         if formula_file:
-            if (bundle_dir / formula_file).exists():
+            formula_path = bundle_dir / formula_file
+            if formula_path.exists():
                 has_formula += 1
+                expected_hash = formula_obj.get("hash")
+                if expected_hash:
+                    actual = _file_sha256(formula_path)
+                    if actual != expected_hash:
+                        hash_mismatches.append(
+                            f"{func_name} formula: expected {expected_hash}, got {actual}"
+                        )
             else:
                 missing_formulas += 1
 
         if proof_file:
-            if (bundle_dir / proof_file).exists():
+            proof_path = bundle_dir / proof_file
+            if proof_path.exists():
                 has_proof += 1
+                expected_hash = proof_obj.get("hash")
+                if expected_hash:
+                    actual = _file_sha256(proof_path)
+                    if actual != expected_hash:
+                        hash_mismatches.append(
+                            f"{func_name} proof: expected {expected_hash}, got {actual}"
+                        )
             else:
                 missing_proofs += 1
 
-    if missing_formulas > 0 or missing_proofs > 0:
-        parts = []
-        if missing_formulas:
-            parts.append(f"{missing_formulas} formula files missing")
-        if missing_proofs:
-            parts.append(f"{missing_proofs} proof files missing")
-        return CheckResult(status="fail", detail="; ".join(parts))
+    problems: list[str] = []
+    if missing_formulas:
+        problems.append(f"{missing_formulas} formula files missing")
+    if missing_proofs:
+        problems.append(f"{missing_proofs} proof files missing")
+    if hash_mismatches:
+        problems.append(f"{len(hash_mismatches)} hash mismatches: {hash_mismatches[0]}")
+
+    if problems:
+        return CheckResult(status="fail", detail="; ".join(problems))
 
     return CheckResult(
         status="pass",

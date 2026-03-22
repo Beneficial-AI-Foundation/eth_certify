@@ -26,9 +26,9 @@ Add this to your project's README:
 - **Ref**: d26bf6e6315633cff1ca6ed1efd163946531cc8e
 - **Commit**: [`d26bf6e`](https://github.com/Beneficial-AI-Foundation/dalek-lite/commit/d26bf6e6315633cff1ca6ed1efd163946531cc8e)
 - **Network**: sepolia
-- **Transaction**: [0x7f160f2647d1d2ef7858536d11817493ef1ce7b8cb66ff895aef3e0c929509a8](https://sepolia.etherscan.io/tx/0x7f160f2647d1d2ef7858536d11817493ef1ce7b8cb66ff895aef3e0c929509a8)
-- **Content Hash**: `0xc82cae1f1ce78b567b9466704cdcd3f5c54c4c3a0a880f8ffd43f4089ce9acd9`
-- **Results**: [results/2026-03-22T07-08-25Z.json](results/2026-03-22T07-08-25Z.json)
+- **Transaction**: [0x5fc1dd1e8eb914b8a3151d4bb33efadc6b07705b1026101172ae6d5f43206721](https://sepolia.etherscan.io/tx/0x5fc1dd1e8eb914b8a3151d4bb33efadc6b07705b1026101172ae6d5f43206721)
+- **Content Hash**: `0x0b9bb2635a10694b15dea9e36dcaadef6431615463d7108e9c7ec11090d9cef0`
+- **Results**: [results/2026-03-22T12-47-01Z.json](results/2026-03-22T12-47-01Z.json)
 
 ### Toolchain
 - **Verus**: 0.2026.01.14.88f7396

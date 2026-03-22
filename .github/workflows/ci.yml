@@ -25,6 +25,9 @@ jobs:
       - name: Lint
         run: uv run ruff check certify_cli/
 
+      - name: Run Python tests
+        run: uv run pytest tests/ -v
+
   solidity:
     name: Solidity Build & Test
     runs-on: ubuntu-latest

@@ -1,0 +1,11 @@
+(:max-memory   21.86
+ :memory       21.86
+ :num-allocs   837634
+ :rlimit-count 15606)
+(:version "4.12.5")
+unsat
+((proof
+(let ((@x11908 (monotonicity (rewrite (= (=> %%location_label%%0 true) true)) (= (not (=> %%location_label%%0 true)) (not true)))))
+ (let ((@x11912 (trans @x11908 (rewrite (= (not true) false)) (= (not (=> %%location_label%%0 true)) false))))
+ (mp (asserted (not (=> %%location_label%%0 true))) @x11912 false)))))
+

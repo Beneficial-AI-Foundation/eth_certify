@@ -1,0 +1,240 @@
+# Verify External Verus Projects (v2 — Python-backed)
+#
+# Uses certify_cli --json output piped through workflow helper scripts.
+# All business logic lives in certify_cli; scripts handle only:
+#   - JSON-to-GITHUB_OUTPUT bridging (workflow_utils.py)
+#   - probe-verus extract output parsing (resolve_extract.py)
+#   - GITHUB_STEP_SUMMARY markdown (verify_summary.py)
+#
+# The original verify-extract.yml is preserved as a backup.
+#
+# Performs multiple levels of verification:
+#   1. STORED RESULTS: Registry lookup, hash checks, Merkle structure, proof bundle
+#   2. ON-CHAIN: Verifies content hash exists on blockchain
+#   3. FRESH VERIFICATION: Re-runs probe-verus extract and compares counts
+
+name: Verify Certification (v2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'GitHub repository URL (e.g., https://github.com/owner/repo)'
+        required: true
+        type: string
+      commit_id:
+        description: 'Git commit SHA to verify (must match the certified commit)'
+        required: true
+        type: string
+      project_path:
+        description: 'Path to Verus project within repo (default: . for root)'
+        required: false
+        default: '.'
+        type: string
+      package:
+        description: 'Package name for workspace projects (optional)'
+        required: false
+        default: ''
+        type: string
+      network:
+        description: 'Ethereum network to verify against'
+        required: false
+        default: 'sepolia'
+        type: choice
+        options:
+          - mainnet
+          - sepolia
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout certify repo
+        uses: actions/checkout@v4
+        with:
+          path: certify
+
+      - name: Parse repository info
+        id: repo
+        run: |
+          python3 certify/.github/scripts/workflow_utils.py parse-repo \
+            "${{ inputs.repo_url }}" >> $GITHUB_OUTPUT
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install certify_cli dependencies
+        working-directory: certify
+        run: uv sync
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1: Verify stored certification (registry, hashes, Merkle,
+      #         proof bundle, taxonomy) — all in one certify_cli command
+      # ═══════════════════════════════════════════════════════════════
+      - name: Verify stored certification
+        id: verify-local
+        working-directory: certify
+        run: |
+          CERT_ID="${{ steps.repo.outputs.cert_id }}"
+          COMMIT_ID="${{ inputs.commit_id }}"
+          NETWORK="${{ inputs.network }}"
+
+          JSON_OUT=$(uv run python -m certify_cli verify-certification \
+            --cert-id "$CERT_ID" \
+            --commit "$COMMIT_ID" \
+            --network "$NETWORK" \
+            --json)
+
+          if ! echo "$JSON_OUT" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+            echo "::error::verify-certification produced invalid JSON output"
+            echo "$JSON_OUT"
+            exit 1
+          fi
+
+          FOUND=$(echo "$JSON_OUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('found',''))")
+          if [ "$FOUND" != "True" ]; then
+            echo "::error::No certification found for $CERT_ID / $COMMIT_ID"
+            exit 1
+          fi
+
+          echo "$JSON_OUT" | python3 .github/scripts/workflow_utils.py json-to-output \
+            content_hash tx_hash verified total network verus_version \
+            results_hash specs_hash proofs_hash proof_bundle \
+            "checks.stored_results.status:stored_results" \
+            "checks.merkle_structure.status:merkle_structure" \
+            "checks.proof_bundle.status:proof_bundle_check" \
+            "checks.proof_bundle.detail:proof_bundle_detail" \
+            taxonomy_summary \
+          >> $GITHUB_OUTPUT
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 2: Verify on-chain certification
+      # ═══════════════════════════════════════════════════════════════
+      - name: Verify on-chain certification
+        id: verify-onchain
+        working-directory: certify
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          CERTIFY_ADDRESS: ${{ inputs.network == 'mainnet' && vars.MAINNET_CERTIFIER_ADDRESS || vars.SEPOLIA_CERTIFIER_ADDRESS }}
+        run: |
+          EXPECTED_HASH="${{ steps.verify-local.outputs.content_hash }}"
+          NETWORK="${{ steps.verify-local.outputs.network }}"
+
+          RPC_ARG=""
+          if [ "$NETWORK" = "mainnet" ] && [ -n "$MAINNET_RPC_URL" ]; then
+            RPC_ARG="--rpc-url $MAINNET_RPC_URL"
+          elif [ "$NETWORK" = "sepolia" ] && [ -n "$SEPOLIA_RPC_URL" ]; then
+            RPC_ARG="--rpc-url $SEPOLIA_RPC_URL"
+          fi
+
+          CONTRACT_ARG=""
+          if [ -n "$CERTIFY_ADDRESS" ]; then
+            CONTRACT_ARG="--contract $CERTIFY_ADDRESS"
+          fi
+
+          set +e
+          JSON_OUT=$(uv run python -m certify_cli verify-hash \
+            "$EXPECTED_HASH" \
+            --network "$NETWORK" \
+            $RPC_ARG $CONTRACT_ARG \
+            --json 2>/dev/null)
+          EXIT_CODE=$?
+          set -e
+
+          if [ $EXIT_CODE -eq 0 ] && echo "$JSON_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if d.get('verified') else 1)" 2>/dev/null; then
+            echo "$JSON_OUT" | python3 .github/scripts/workflow_utils.py json-to-output \
+              "verified:onchain_verified" tx_hash etherscan_url \
+            >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Certification not found in recent blocks (may be older than 50000 blocks)"
+            echo "onchain_verified=skipped" >> $GITHUB_OUTPUT
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 3: Re-run Verus verification and compare results
+      # ═══════════════════════════════════════════════════════════════
+      - name: Checkout target project at specific commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.repo.outputs.repo_path }}
+          ref: ${{ inputs.commit_id }}
+          path: target
+
+      - name: Verify commit SHA
+        working-directory: target
+        run: |
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          EXPECTED_SHA="${{ inputs.commit_id }}"
+
+          if [[ ! "$ACTUAL_SHA" == "$EXPECTED_SHA"* ]] && [[ ! "$EXPECTED_SHA" == "$ACTUAL_SHA"* ]]; then
+            echo "::error::Commit SHA mismatch!"
+            exit 1
+          fi
+
+      - name: Run fresh Verus verification
+        uses: beneficial-ai-foundation/probe-verus/action-extract@v5
+        id: fresh-extract
+        with:
+          project-path: target/${{ inputs.project_path }}
+          package: ${{ inputs.package }}
+          output-dir: ./output
+
+      - name: Compare verification results
+        id: compare
+        run: |
+          CERTIFIED_VERIFIED="${{ steps.verify-local.outputs.verified }}"
+          CERTIFIED_TOTAL="${{ steps.verify-local.outputs.total }}"
+          FRESH_VERIFIED="${{ steps.fresh-extract.outputs.verified-count }}"
+          FRESH_TOTAL="${{ steps.fresh-extract.outputs.total-functions }}"
+
+          echo "Certified results:  $CERTIFIED_VERIFIED / $CERTIFIED_TOTAL verified"
+          echo "Fresh results:      $FRESH_VERIFIED / $FRESH_TOTAL verified"
+
+          if [ "$CERTIFIED_VERIFIED" = "$FRESH_VERIFIED" ] && [ "$CERTIFIED_TOTAL" = "$FRESH_TOTAL" ]; then
+            echo "Fresh verification matches certified results!"
+            echo "results_match=true" >> $GITHUB_OUTPUT
+          else
+            echo "Results differ from certification"
+            echo "results_match=false" >> $GITHUB_OUTPUT
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 4: Summary
+      # ═══════════════════════════════════════════════════════════════
+      - name: Final summary
+        if: always()
+        run: |
+          python3 certify/.github/scripts/verify_summary.py \
+            --repo "${{ steps.repo.outputs.repo_path }}" \
+            --commit "${{ inputs.commit_id }}" \
+            --network "${{ steps.verify-local.outputs.network }}" \
+            --content-hash "${{ steps.verify-local.outputs.content_hash }}" \
+            --verified "${{ steps.verify-local.outputs.verified }}" \
+            --total "${{ steps.verify-local.outputs.total }}" \
+            --verus-version "${{ steps.verify-local.outputs.verus_version }}" \
+            --stored "${{ steps.verify-local.outputs.stored_results }}" \
+            --merkle "${{ steps.verify-local.outputs.merkle_structure }}" \
+            --proofs-check "${{ steps.verify-local.outputs.proof_bundle_check }}" \
+            --onchain "${{ steps.verify-onchain.outputs.onchain_verified }}" \
+            --results-match "${{ steps.compare.outputs.results_match }}" \
+            --fresh-verified "${{ steps.fresh-extract.outputs.verified-count }}" \
+            --fresh-total "${{ steps.fresh-extract.outputs.total-functions }}" \
+            --proof-bundle "${{ steps.verify-local.outputs.proof_bundle }}" \
+            --proofs-hash "${{ steps.verify-local.outputs.proofs_hash }}" \
+            --specs-hash "${{ steps.verify-local.outputs.specs_hash }}" \
+            --proofs-detail "${{ steps.verify-local.outputs.proof_bundle_detail }}" \
+            --taxonomy "${{ steps.verify-local.outputs.taxonomy_summary }}" \
+            --etherscan-url "${{ steps.verify-onchain.outputs.etherscan_url }}" \
+          >> $GITHUB_STEP_SUMMARY

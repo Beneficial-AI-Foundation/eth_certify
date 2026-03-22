@@ -74,6 +74,25 @@ def main() -> int:
         metavar="SHA",
         help="Git commit SHA to record on-chain (as bytes32 in the Certified event)",
     )
+    certify_parser.add_argument(
+        "--source",
+        type=str,
+        metavar="PATH",
+        help="Content source (overrides certify.conf CERTIFY_SOURCE)",
+    )
+    certify_parser.add_argument(
+        "--description",
+        type=str,
+        default=None,
+        metavar="TEXT",
+        help="Description (overrides certify.conf CERTIFY_DESCRIPTION)",
+    )
+    certify_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="output_json",
+        help="Output structured JSON to stdout",
+    )
 
     # Verify command
     verify_parser = subparsers.add_parser(
@@ -122,6 +141,12 @@ def main() -> int:
         type=int,
         default=None,
         help="Start block for log search (default: current - 50000)",
+    )
+    verify_hash_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="output_json",
+        help="Output structured JSON to stdout",
     )
 
     # Verify-certification command (local registry + hash checks)
@@ -321,6 +346,12 @@ def main() -> int:
         action="store_true",
         help="Skip Z3 proof generation (only map functions to .smt2 queries)",
     )
+    proofs_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="output_json",
+        help="Output structured JSON to stdout",
+    )
 
     args = parser.parse_args()
 
@@ -364,22 +395,42 @@ def _handle_deploy(args: argparse.Namespace) -> int:
 
 def _handle_certify(args: argparse.Namespace) -> int:
     """Handle the certify command."""
+    import json as json_mod
+    import os
+    import sys as _sys
+
     env = EnvConfig.load()
-    certify_config = CertifyConfig.load()
     network = _parse_network(args.network)
 
-    # CLI --specs-source overrides config file
-    if args.specs_source:
+    if args.source:
         certify_config = CertifyConfig(
-            source=certify_config.source,
-            description=certify_config.description,
+            source=args.source,
+            description=args.description or "Content certification",
             specs_source=args.specs_source,
         )
+    else:
+        certify_config = CertifyConfig.load()
+        if args.specs_source:
+            certify_config = CertifyConfig(
+                source=certify_config.source,
+                description=args.description or certify_config.description,
+                specs_source=args.specs_source,
+            )
+        elif args.description:
+            certify_config = CertifyConfig(
+                source=certify_config.source,
+                description=args.description,
+                specs_source=certify_config.specs_source,
+            )
 
-    # Validate --execute requires --safe
     if args.execute and not args.safe:
-        print("Error: --execute requires --safe ADDRESS")
+        print("Error: --execute requires --safe ADDRESS", file=_sys.stderr)
         return 1
+
+    if args.output_json:
+        _saved_fd = os.dup(1)
+        os.dup2(2, 1)
+        _sys.stdout = _sys.stderr
 
     result = certify_content(
         env,
@@ -389,13 +440,27 @@ def _handle_certify(args: argparse.Namespace) -> int:
         safe_execute=args.execute,
         commit_hash=args.commit_sha,
     )
-    print(result.message)
 
-    # Output Merkle sub-hashes for downstream consumption (e.g., workflow steps)
-    if result.results_hash:
-        print(f"Results Hash: {result.results_hash}")
-    if result.specs_hash:
-        print(f"Specs Hash: {result.specs_hash}")
+    if args.output_json:
+        os.dup2(_saved_fd, 1)
+        os.close(_saved_fd)
+        _sys.stdout = open(1, "w")
+        obj = {
+            "success": result.success,
+            "content_hash": result.content_hash,
+            "contract_address": result.contract_address,
+            "tx_hash": result.tx_hash,
+            "etherscan_url": result.etherscan_url,
+            "results_hash": result.results_hash,
+            "specs_hash": result.specs_hash,
+        }
+        print(json_mod.dumps(obj, indent=2))
+    else:
+        print(result.message)
+        if result.results_hash:
+            print(f"Results Hash: {result.results_hash}")
+        if result.specs_hash:
+            print(f"Specs Hash: {result.specs_hash}")
 
     return 0 if result.success else 1
 
@@ -422,13 +487,14 @@ def _handle_verify(args: argparse.Namespace) -> int:
 
 def _handle_verify_hash(args: argparse.Namespace) -> int:
     """Handle the verify-hash command."""
+    import json as json_mod
     import os
+    import sys as _sys
 
     rpc_url = args.rpc_url
     contract = args.contract
     network = args.network
 
-    # Set up RPC URL from env or defaults
     if not rpc_url:
         if network == "mainnet":
             rpc_url = os.getenv(
@@ -439,19 +505,21 @@ def _handle_verify_hash(args: argparse.Namespace) -> int:
                 "SEPOLIA_RPC_URL", "https://ethereum-sepolia-rpc.publicnode.com"
             )
 
-    # Set up contract address from env or defaults
     if not contract:
         contract = os.getenv("CERTIFY_ADDRESS")
         if not contract:
-            # Known contract addresses
             if network == "sepolia":
                 contract = "0x125721f8a45bbABC60aDbaaF102a94d9cae59238"
-            # For mainnet, contract must be set via env or --contract
 
     if not contract:
-        print(f"Error: Contract address required for {network}")
-        print("Set CERTIFY_ADDRESS env var or use --contract")
+        print(f"Error: Contract address required for {network}", file=_sys.stderr)
+        print("Set CERTIFY_ADDRESS env var or use --contract", file=_sys.stderr)
         return 1
+
+    if args.output_json:
+        _saved_fd = os.dup(1)
+        os.dup2(2, 1)
+        _sys.stdout = _sys.stderr
 
     result = verify_by_content_hash(
         args.content_hash,
@@ -460,7 +528,32 @@ def _handle_verify_hash(args: argparse.Namespace) -> int:
         network=network,
         from_block=args.from_block,
     )
-    print(result.message)
+
+    if args.output_json:
+        os.dup2(_saved_fd, 1)
+        os.close(_saved_fd)
+        _sys.stdout = open(1, "w")
+        cert = result.certification
+        etherscan_base = (
+            "https://etherscan.io"
+            if network == "mainnet"
+            else "https://sepolia.etherscan.io"
+        )
+        obj = {
+            "verified": result.verified,
+            "content_hash": result.content_hash,
+            "tx_hash": cert.transaction_hash if cert else None,
+            "etherscan_url": (
+                f"{etherscan_base}/tx/{cert.transaction_hash}" if cert else None
+            ),
+            "certifier": cert.certifier_address if cert else None,
+            "block": cert.block_number if cert else None,
+            "timestamp": cert.timestamp if cert else None,
+        }
+        print(json_mod.dumps(obj, indent=2))
+    else:
+        print(result.message)
+
     return 0 if result.verified else 1
 
 
@@ -515,6 +608,7 @@ def _handle_update_registry(args: argparse.Namespace) -> int:
 def _handle_generate_proofs(args: argparse.Namespace) -> int:
     """Handle the generate-proofs command."""
     import json
+    import sys as _sys
 
     smt_log_dir = Path(args.smt_log_dir)
     results_path = Path(args.results_file)
@@ -522,21 +616,29 @@ def _handle_generate_proofs(args: argparse.Namespace) -> int:
     output_dir = Path(args.output_dir)
 
     if not smt_log_dir.is_dir():
-        print(f"Error: SMT log directory not found: {smt_log_dir}")
+        print(f"Error: SMT log directory not found: {smt_log_dir}", file=_sys.stderr)
         return 1
 
     if not results_path.is_file():
-        print(f"Error: Results file not found: {results_path}")
+        print(f"Error: Results file not found: {results_path}", file=_sys.stderr)
         return 1
 
-    print("Generating Z3 proof certificates...")
-    print(f"  SMT log dir:  {smt_log_dir}")
-    print(f"  Results file: {results_path}")
+    import os as _os
+
+    if args.output_json:
+        _saved_fd = _os.dup(1)
+        _os.dup2(2, 1)
+        _sys.stdout = _sys.stderr
+
+    out = _sys.stderr if args.output_json else _sys.stdout
+    print("Generating Z3 proof certificates...", file=out)
+    print(f"  SMT log dir:  {smt_log_dir}", file=out)
+    print(f"  Results file: {results_path}", file=out)
     if specs_path:
-        print(f"  Specs file:   {specs_path}")
-    print(f"  Output dir:   {output_dir}")
-    print(f"  Generate Z3 proofs: {not args.no_proofs}")
-    print()
+        print(f"  Specs file:   {specs_path}", file=out)
+    print(f"  Output dir:   {output_dir}", file=out)
+    print(f"  Generate Z3 proofs: {not args.no_proofs}", file=out)
+    print(file=out)
 
     proofs = build_proofs_json(
         smt_log_dir=smt_log_dir,
@@ -552,16 +654,30 @@ def _handle_generate_proofs(args: argparse.Namespace) -> int:
 
     results = json.loads(results_path.read_text())
     summary = summarise_proofs(proofs, results)
-    summary.print_report()
+    summary.print_report(file=out)
 
-    print(f"\nProof bundle written to {output_dir}/")
-    print(f"  proofs.json:    {proofs_path}")
-    print(
-        f"  smt_queries/:   {len([e for e in proofs.values() if e.get('z3_formula')])} files"
+    smt_count = len([e for e in proofs.values() if e.get("z3_formula")])
+    z3_proof_count = len(
+        [e for e in proofs.values() if e.get("z3_proof", {}).get("file")]
     )
-    print(
-        f"  z3_proofs/:     {len([e for e in proofs.values() if e.get('z3_proof', {}).get('file')])} files"
-    )
+
+    print(f"\nProof bundle written to {output_dir}/", file=out)
+    print(f"  proofs.json:    {proofs_path}", file=out)
+    print(f"  smt_queries/:   {smt_count} files", file=out)
+    print(f"  z3_proofs/:     {z3_proof_count} files", file=out)
+
+    if args.output_json:
+        _os.dup2(_saved_fd, 1)
+        _os.close(_saved_fd)
+        _sys.stdout = open(1, "w")
+        obj = {
+            "proof_bundle_dir": str(output_dir),
+            "proof_count": len(proofs),
+            "smt_count": smt_count,
+            "z3_proof_count": z3_proof_count,
+        }
+        print(json.dumps(obj, indent=2))
+
     return 0
 
 

@@ -1,0 +1,17 @@
+(:max-memory   22.44
+ :memory       22.44
+ :num-allocs   1123358
+ :rlimit-count 29287)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x202030 (curve25519_dalek!backend.serial.u64.field.FieldElement51./FieldElement51 (%Poly%array%. (Poly%array%. limbs!)))))
+ (let (($x202031 (= result! ?x202030)))
+ (let (($x202033 (=> %%location_label%%0 $x202031)))
+ (let (($x202034 (=> (and $x202031 %%location_label%%0) $x202031)))
+ (let (($x202035 (not $x202034)))
+ (let ((@x202043 (monotonicity (rewrite (= $x202033 (or (not %%location_label%%0) $x202031))) (= $x202034 (=> $x202031 (or (not %%location_label%%0) $x202031))))))
+ (let ((@x202047 (trans @x202043 (rewrite (= (=> $x202031 (or (not %%location_label%%0) $x202031)) true)) (= $x202034 true))))
+ (let ((@x202054 (trans (monotonicity @x202047 (= $x202035 (not true))) (rewrite (= (not true) false)) (= $x202035 false))))
+ (mp (asserted $x202035) @x202054 false)))))))))))
+

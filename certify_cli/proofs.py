@@ -520,18 +520,25 @@ class ProofsSummary:
     total_query_size: int = 0
     total_proof_size: int = 0
 
-    def print_report(self) -> None:
+    def print_report(self, file=None) -> None:
         """Print a human-readable summary."""
-        print("Proof Certificate Summary:")
-        print(f"  Total functions in results: {self.total_functions}")
-        print(f"  Functions matched to .smt2: {self.matched_smt2}")
-        print(f"  Z3 proofs generated:        {self.proofs_generated}")
-        print(f"  Z3 proofs failed:           {self.proofs_failed}")
+        import sys as _sys
+
+        f = file or _sys.stdout
+        print("Proof Certificate Summary:", file=f)
+        print(f"  Total functions in results: {self.total_functions}", file=f)
+        print(f"  Functions matched to .smt2: {self.matched_smt2}", file=f)
+        print(f"  Z3 proofs generated:        {self.proofs_generated}", file=f)
+        print(f"  Z3 proofs failed:           {self.proofs_failed}", file=f)
         if self.total_query_size > 0:
             ratio = self.total_proof_size / self.total_query_size
-            print(f"  Total query size:           {self.total_query_size:,} bytes")
-            print(f"  Total proof size:           {self.total_proof_size:,} bytes")
-            print(f"  Proof/query ratio:          {ratio:.1f}x")
+            print(
+                f"  Total query size:           {self.total_query_size:,} bytes", file=f
+            )
+            print(
+                f"  Total proof size:           {self.total_proof_size:,} bytes", file=f
+            )
+            print(f"  Proof/query ratio:          {ratio:.1f}x", file=f)
 
 
 def summarise_proofs(proofs: dict, results: dict) -> ProofsSummary:
