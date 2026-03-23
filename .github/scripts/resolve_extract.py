@@ -25,7 +25,7 @@ def resolve(summary_path: str, extract_path: str) -> dict[str, str]:
     """Parse extract summary and extract file, returning output dict."""
     outputs: dict[str, str] = {}
 
-    outputs["extract_file"] = extract_path
+    outputs["extract_file"] = extract_path if (extract_path and os.path.isfile(extract_path)) else ""
 
     if not os.path.isfile(summary_path):
         print(f"::error::extract_summary.json not found: {summary_path}", file=sys.stderr)
@@ -50,31 +50,48 @@ def resolve(summary_path: str, extract_path: str) -> dict[str, str]:
     else:
         outputs["specs_file"] = ""
 
-    # Taxonomy summary from extract.json
-    outputs["taxonomy_summary"] = ""
-    if extract_path and os.path.isfile(extract_path):
-        try:
-            with open(extract_path) as f:
-                extract_data = json.load(f)
+    # If extract-file wasn't provided by the action, try primary_output from summary
+    if not outputs["extract_file"]:
+        primary = data.get("extract", {}).get("output_file", "") or summary.get("primary_output", "")
+        if primary and os.path.isfile(primary):
+            outputs["extract_file"] = os.path.realpath(primary)
 
-            items = extract_data.get("data", extract_data)
-            if isinstance(items, list):
-                labeled = [
-                    e for e in items
-                    if e.get("spec-labels") and len(e["spec-labels"]) > 0
-                ]
-                if labeled:
-                    all_labels: list[str] = []
-                    for e in items:
-                        all_labels.extend(e.get("spec-labels", []))
-                    from collections import Counter
-                    counts = Counter(all_labels)
-                    parts = [f"{count} {label}" for label, count in counts.most_common()]
-                    outputs["taxonomy_summary"] = ", ".join(parts)
-        except (json.JSONDecodeError, KeyError):
-            pass
+    # Taxonomy summary: try extract.json first, fall back to specs.json
+    outputs["taxonomy_summary"] = (
+        _extract_taxonomy(outputs["extract_file"])
+        or _extract_taxonomy(outputs.get("specs_file", ""))
+    )
 
     return outputs
+
+
+def _extract_taxonomy(path: str) -> str:
+    """Extract taxonomy label summary from a JSON file containing spec-labels."""
+    if not path or not os.path.isfile(path):
+        return ""
+    try:
+        with open(path) as f:
+            raw = json.load(f)
+
+        items = raw.get("data", raw)
+        if isinstance(items, dict):
+            items = list(items.values())
+        if not isinstance(items, list):
+            return ""
+
+        all_labels: list[str] = []
+        for e in items:
+            if isinstance(e, dict):
+                all_labels.extend(e.get("spec-labels", []))
+        if not all_labels:
+            return ""
+
+        from collections import Counter
+        counts = Counter(all_labels)
+        parts = [f"{count} {label}" for label, count in counts.most_common()]
+        return ", ".join(parts)
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return ""
 
 
 def main() -> None:
