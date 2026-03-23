@@ -1,0 +1,25 @@
+(:max-memory   21.56
+ :memory       21.56
+ :num-allocs   716851
+ :rlimit-count 8998)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x37740 (Poly%array%. bytes!)))
+ (let ((?x2278 (CONST_INT 32)))
+ (let ((?x1909 (UINT 8)))
+ (let ((?x37752 (vstd!array.spec_array_as_slice.? $ ?x1909 $ ?x2278 ?x37740)))
+ (let (($x37753 (curve25519_dalek!specs.proba_specs.is_uniform_bytes.? ?x37752)))
+ (let ((?x37744 (Poly%curve25519_dalek!backend.serial.u64.field.FieldElement51. fe!)))
+ (let (($x37754 (curve25519_dalek!specs.proba_specs.is_uniform_field_element.? ?x37744)))
+ (let (($x37761 (not $x37753)))
+ (let (($x37783 (not (or (not (or $x37761 $x37754)) (not %%location_label%%0) $x37761 $x37754))))
+ (let (($x37759 (not (=> (and (=> $x37753 $x37754) %%location_label%%0 $x37753) $x37754))))
+ (let ((@x37765 (mp (asserted $x37759) (rewrite (= $x37759 $x37783)) $x37783)))
+ (let ((@x37769 (not-or-elim @x37765 $x37753)))
+ (let (($x37770 (not $x37754)))
+ (let ((@x37771 (not-or-elim @x37765 $x37770)))
+ (let (($x37762 (or $x37761 $x37754)))
+ (let ((@x37774 (mp (not-or-elim @x37765 $x37762) (rewrite (= $x37762 $x37762)) $x37762)))
+ (unit-resolution @x37774 @x37771 @x37769 false)))))))))))))))))))
+

@@ -1,0 +1,4126 @@
+(set-option :auto_config false)
+(set-option :smt.mbqi false)
+(set-option :smt.case_split 3)
+(set-option :smt.qi.eager_threshold 100.0)
+(set-option :smt.delay_units true)
+(set-option :smt.arith.solver 2)
+(set-option :smt.arith.nl false)
+(set-option :pi.enabled false)
+(set-option :rewriter.sort_disjunctions false)
+
+;; Prelude
+
+;; AIR prelude
+(declare-sort %%Function%% 0)
+
+(declare-sort FuelId 0)
+(declare-sort Fuel 0)
+(declare-const zero Fuel)
+(declare-fun succ (Fuel) Fuel)
+(declare-fun fuel_bool (FuelId) Bool)
+(declare-fun fuel_bool_default (FuelId) Bool)
+(declare-const fuel_defaults Bool)
+(assert
+ (=>
+  fuel_defaults
+  (forall ((id FuelId)) (!
+    (= (fuel_bool id) (fuel_bool_default id))
+    :pattern ((fuel_bool id))
+    :qid prelude_fuel_defaults
+    :skolemid skolem_prelude_fuel_defaults
+))))
+(declare-datatypes ((fndef 0)) (((fndef_singleton))))
+(declare-sort Poly 0)
+(declare-sort Height 0)
+(declare-fun I (Int) Poly)
+(declare-fun B (Bool) Poly)
+(declare-fun R (Real) Poly)
+(declare-fun F (fndef) Poly)
+(declare-fun %I (Poly) Int)
+(declare-fun %B (Poly) Bool)
+(declare-fun %R (Poly) Real)
+(declare-fun %F (Poly) fndef)
+(declare-sort Type 0)
+(declare-const BOOL Type)
+(declare-const INT Type)
+(declare-const NAT Type)
+(declare-const REAL Type)
+(declare-const CHAR Type)
+(declare-const USIZE Type)
+(declare-const ISIZE Type)
+(declare-const TYPE%tuple%0. Type)
+(declare-fun UINT (Int) Type)
+(declare-fun SINT (Int) Type)
+(declare-fun FLOAT (Int) Type)
+(declare-fun CONST_INT (Int) Type)
+(declare-fun CONST_BOOL (Bool) Type)
+(declare-sort Dcr 0)
+(declare-const $ Dcr)
+(declare-const $slice Dcr)
+(declare-const $dyn Dcr)
+(declare-fun DST (Dcr) Dcr)
+(declare-fun REF (Dcr) Dcr)
+(declare-fun MUT_REF (Dcr) Dcr)
+(declare-fun BOX (Dcr Type Dcr) Dcr)
+(declare-fun RC (Dcr Type Dcr) Dcr)
+(declare-fun ARC (Dcr Type Dcr) Dcr)
+(declare-fun GHOST (Dcr) Dcr)
+(declare-fun TRACKED (Dcr) Dcr)
+(declare-fun NEVER (Dcr) Dcr)
+(declare-fun CONST_PTR (Dcr) Dcr)
+(declare-fun ARRAY (Dcr Type Dcr Type) Type)
+(declare-fun MUTREF (Dcr Type) Type)
+(declare-fun SLICE (Dcr Type) Type)
+(declare-const STRSLICE Type)
+(declare-const ALLOCATOR_GLOBAL Type)
+(declare-fun PTR (Dcr Type) Type)
+(declare-fun has_type (Poly Type) Bool)
+(declare-fun sized (Dcr) Bool)
+(declare-fun as_type (Poly Type) Poly)
+(declare-fun mk_fun (%%Function%%) %%Function%%)
+(declare-fun const_int (Type) Int)
+(declare-fun const_bool (Type) Bool)
+(declare-fun mut_ref_current% (Poly) Poly)
+(declare-fun mut_ref_future% (Poly) Poly)
+(declare-fun mut_ref_update_current% (Poly Poly) Poly)
+(assert
+ (forall ((m Poly) (arg Poly)) (!
+   (= (mut_ref_current% (mut_ref_update_current% m arg)) arg)
+   :pattern ((mut_ref_update_current% m arg))
+   :qid prelude_mut_ref_update_current_current
+   :skolemid skolem_prelude_mut_ref_update_current_current
+)))
+(assert
+ (forall ((m Poly) (arg Poly)) (!
+   (= (mut_ref_future% (mut_ref_update_current% m arg)) (mut_ref_future% m))
+   :pattern ((mut_ref_update_current% m arg))
+   :qid prelude_mut_ref_update_current_future
+   :skolemid skolem_prelude_mut_ref_update_current_future
+)))
+(assert
+ (forall ((m Poly) (d Dcr) (t Type)) (!
+   (=>
+    (has_type m (MUTREF d t))
+    (has_type (mut_ref_current% m) t)
+   )
+   :pattern ((has_type m (MUTREF d t)) (mut_ref_current% m))
+   :qid prelude_mut_ref_current_has_type
+   :skolemid skolem_prelude_mut_ref_current_has_type
+)))
+(assert
+ (forall ((m Poly) (d Dcr) (t Type)) (!
+   (=>
+    (has_type m (MUTREF d t))
+    (has_type (mut_ref_future% m) t)
+   )
+   :pattern ((has_type m (MUTREF d t)) (mut_ref_future% m))
+   :qid prelude_mut_ref_current_has_type
+   :skolemid skolem_prelude_mut_ref_current_has_type
+)))
+(assert
+ (forall ((m Poly) (d Dcr) (t Type) (arg Poly)) (!
+   (=>
+    (and
+     (has_type m (MUTREF d t))
+     (has_type arg t)
+    )
+    (has_type (mut_ref_update_current% m arg) (MUTREF d t))
+   )
+   :pattern ((has_type m (MUTREF d t)) (mut_ref_update_current% m arg))
+   :qid prelude_mut_ref_update_has_type
+   :skolemid skolem_prelude_mut_ref_update_has_type
+)))
+(assert
+ (forall ((d Dcr)) (!
+   (=>
+    (sized d)
+    (sized (DST d))
+   )
+   :pattern ((sized (DST d)))
+   :qid prelude_sized_decorate_struct_inherit
+   :skolemid skolem_prelude_sized_decorate_struct_inherit
+)))
+(assert
+ (forall ((d Dcr)) (!
+   (sized (REF d))
+   :pattern ((sized (REF d)))
+   :qid prelude_sized_decorate_ref
+   :skolemid skolem_prelude_sized_decorate_ref
+)))
+(assert
+ (forall ((d Dcr)) (!
+   (sized (MUT_REF d))
+   :pattern ((sized (MUT_REF d)))
+   :qid prelude_sized_decorate_mut_ref
+   :skolemid skolem_prelude_sized_decorate_mut_ref
+)))
+(assert
+ (forall ((d Dcr) (t Type) (d2 Dcr)) (!
+   (sized (BOX d t d2))
+   :pattern ((sized (BOX d t d2)))
+   :qid prelude_sized_decorate_box
+   :skolemid skolem_prelude_sized_decorate_box
+)))
+(assert
+ (forall ((d Dcr) (t Type) (d2 Dcr)) (!
+   (sized (RC d t d2))
+   :pattern ((sized (RC d t d2)))
+   :qid prelude_sized_decorate_rc
+   :skolemid skolem_prelude_sized_decorate_rc
+)))
+(assert
+ (forall ((d Dcr) (t Type) (d2 Dcr)) (!
+   (sized (ARC d t d2))
+   :pattern ((sized (ARC d t d2)))
+   :qid prelude_sized_decorate_arc
+   :skolemid skolem_prelude_sized_decorate_arc
+)))
+(assert
+ (forall ((d Dcr)) (!
+   (sized (GHOST d))
+   :pattern ((sized (GHOST d)))
+   :qid prelude_sized_decorate_ghost
+   :skolemid skolem_prelude_sized_decorate_ghost
+)))
+(assert
+ (forall ((d Dcr)) (!
+   (sized (TRACKED d))
+   :pattern ((sized (TRACKED d)))
+   :qid prelude_sized_decorate_tracked
+   :skolemid skolem_prelude_sized_decorate_tracked
+)))
+(assert
+ (forall ((d Dcr)) (!
+   (sized (NEVER d))
+   :pattern ((sized (NEVER d)))
+   :qid prelude_sized_decorate_never
+   :skolemid skolem_prelude_sized_decorate_never
+)))
+(assert
+ (forall ((d Dcr)) (!
+   (sized (CONST_PTR d))
+   :pattern ((sized (CONST_PTR d)))
+   :qid prelude_sized_decorate_const_ptr
+   :skolemid skolem_prelude_sized_decorate_const_ptr
+)))
+(assert
+ (sized $)
+)
+(assert
+ (forall ((i Int)) (!
+   (= i (const_int (CONST_INT i)))
+   :pattern ((CONST_INT i))
+   :qid prelude_type_id_const_int
+   :skolemid skolem_prelude_type_id_const_int
+)))
+(assert
+ (forall ((b Bool)) (!
+   (= b (const_bool (CONST_BOOL b)))
+   :pattern ((CONST_BOOL b))
+   :qid prelude_type_id_const_bool
+   :skolemid skolem_prelude_type_id_const_bool
+)))
+(assert
+ (forall ((b Bool)) (!
+   (has_type (B b) BOOL)
+   :pattern ((has_type (B b) BOOL))
+   :qid prelude_has_type_bool
+   :skolemid skolem_prelude_has_type_bool
+)))
+(assert
+ (forall ((r Real)) (!
+   (has_type (R r) REAL)
+   :pattern ((has_type (R r) REAL))
+   :qid prelude_has_type_real
+   :skolemid skolem_prelude_has_type_real
+)))
+(assert
+ (forall ((x Poly) (t Type)) (!
+   (and
+    (has_type (as_type x t) t)
+    (=>
+     (has_type x t)
+     (= x (as_type x t))
+   ))
+   :pattern ((as_type x t))
+   :qid prelude_as_type
+   :skolemid skolem_prelude_as_type
+)))
+(assert
+ (forall ((x %%Function%%)) (!
+   (= (mk_fun x) x)
+   :pattern ((mk_fun x))
+   :qid prelude_mk_fun
+   :skolemid skolem_prelude_mk_fun
+)))
+(assert
+ (forall ((x Bool)) (!
+   (= x (%B (B x)))
+   :pattern ((B x))
+   :qid prelude_unbox_box_bool
+   :skolemid skolem_prelude_unbox_box_bool
+)))
+(assert
+ (forall ((x Int)) (!
+   (= x (%I (I x)))
+   :pattern ((I x))
+   :qid prelude_unbox_box_int
+   :skolemid skolem_prelude_unbox_box_int
+)))
+(assert
+ (forall ((x Real)) (!
+   (= x (%R (R x)))
+   :pattern ((R x))
+   :qid prelude_unbox_box_real
+   :skolemid skolem_prelude_unbox_box_real
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x BOOL)
+    (= x (B (%B x)))
+   )
+   :pattern ((has_type x BOOL))
+   :qid prelude_box_unbox_bool
+   :skolemid skolem_prelude_box_unbox_bool
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x INT)
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x INT))
+   :qid prelude_box_unbox_int
+   :skolemid skolem_prelude_box_unbox_int
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x NAT)
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x NAT))
+   :qid prelude_box_unbox_nat
+   :skolemid skolem_prelude_box_unbox_nat
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x USIZE)
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x USIZE))
+   :qid prelude_box_unbox_usize
+   :skolemid skolem_prelude_box_unbox_usize
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x ISIZE)
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x ISIZE))
+   :qid prelude_box_unbox_isize
+   :skolemid skolem_prelude_box_unbox_isize
+)))
+(assert
+ (forall ((bits Int) (x Poly)) (!
+   (=>
+    (has_type x (UINT bits))
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x (UINT bits)))
+   :qid prelude_box_unbox_uint
+   :skolemid skolem_prelude_box_unbox_uint
+)))
+(assert
+ (forall ((bits Int) (x Poly)) (!
+   (=>
+    (has_type x (SINT bits))
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x (SINT bits)))
+   :qid prelude_box_unbox_sint
+   :skolemid skolem_prelude_box_unbox_sint
+)))
+(assert
+ (forall ((bits Int) (x Poly)) (!
+   (=>
+    (has_type x (FLOAT bits))
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x (FLOAT bits)))
+   :qid prelude_box_unbox_sint
+   :skolemid skolem_prelude_box_unbox_sint
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x CHAR)
+    (= x (I (%I x)))
+   )
+   :pattern ((has_type x CHAR))
+   :qid prelude_box_unbox_char
+   :skolemid skolem_prelude_box_unbox_char
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x REAL)
+    (= x (R (%R x)))
+   )
+   :pattern ((has_type x REAL))
+   :qid prelude_box_unbox_real
+   :skolemid skolem_prelude_box_unbox_real
+)))
+(declare-fun ext_eq (Bool Type Poly Poly) Bool)
+(assert
+ (forall ((deep Bool) (t Type) (x Poly) (y Poly)) (!
+   (= (= x y) (ext_eq deep t x y))
+   :pattern ((ext_eq deep t x y))
+   :qid prelude_ext_eq
+   :skolemid skolem_prelude_ext_eq
+)))
+(declare-const SZ Int)
+(assert
+ (or
+  (= SZ 32)
+  (= SZ 64)
+))
+(declare-fun uHi (Int) Int)
+(declare-fun iLo (Int) Int)
+(declare-fun iHi (Int) Int)
+(assert
+ (= (uHi 8) 256)
+)
+(assert
+ (= (uHi 16) 65536)
+)
+(assert
+ (= (uHi 32) 4294967296)
+)
+(assert
+ (= (uHi 64) 18446744073709551616)
+)
+(assert
+ (= (uHi 128) (+ 1 340282366920938463463374607431768211455))
+)
+(assert
+ (= (iLo 8) (- 128))
+)
+(assert
+ (= (iLo 16) (- 32768))
+)
+(assert
+ (= (iLo 32) (- 2147483648))
+)
+(assert
+ (= (iLo 64) (- 9223372036854775808))
+)
+(assert
+ (= (iLo 128) (- 170141183460469231731687303715884105728))
+)
+(assert
+ (= (iHi 8) 128)
+)
+(assert
+ (= (iHi 16) 32768)
+)
+(assert
+ (= (iHi 32) 2147483648)
+)
+(assert
+ (= (iHi 64) 9223372036854775808)
+)
+(assert
+ (= (iHi 128) 170141183460469231731687303715884105728)
+)
+(declare-fun nClip (Int) Int)
+(declare-fun uClip (Int Int) Int)
+(declare-fun iClip (Int Int) Int)
+(declare-fun charClip (Int) Int)
+(assert
+ (forall ((i Int)) (!
+   (and
+    (<= 0 (nClip i))
+    (=>
+     (<= 0 i)
+     (= i (nClip i))
+   ))
+   :pattern ((nClip i))
+   :qid prelude_nat_clip
+   :skolemid skolem_prelude_nat_clip
+)))
+(assert
+ (forall ((bits Int) (i Int)) (!
+   (and
+    (<= 0 (uClip bits i))
+    (< (uClip bits i) (uHi bits))
+    (=>
+     (and
+      (<= 0 i)
+      (< i (uHi bits))
+     )
+     (= i (uClip bits i))
+   ))
+   :pattern ((uClip bits i))
+   :qid prelude_u_clip
+   :skolemid skolem_prelude_u_clip
+)))
+(assert
+ (forall ((bits Int) (i Int)) (!
+   (and
+    (<= (iLo bits) (iClip bits i))
+    (< (iClip bits i) (iHi bits))
+    (=>
+     (and
+      (<= (iLo bits) i)
+      (< i (iHi bits))
+     )
+     (= i (iClip bits i))
+   ))
+   :pattern ((iClip bits i))
+   :qid prelude_i_clip
+   :skolemid skolem_prelude_i_clip
+)))
+(assert
+ (forall ((i Int)) (!
+   (and
+    (or
+     (and
+      (<= 0 (charClip i))
+      (<= (charClip i) 55295)
+     )
+     (and
+      (<= 57344 (charClip i))
+      (<= (charClip i) 1114111)
+    ))
+    (=>
+     (or
+      (and
+       (<= 0 i)
+       (<= i 55295)
+      )
+      (and
+       (<= 57344 i)
+       (<= i 1114111)
+     ))
+     (= i (charClip i))
+   ))
+   :pattern ((charClip i))
+   :qid prelude_char_clip
+   :skolemid skolem_prelude_char_clip
+)))
+(declare-fun uInv (Int Int) Bool)
+(declare-fun iInv (Int Int) Bool)
+(declare-fun charInv (Int) Bool)
+(assert
+ (forall ((bits Int) (i Int)) (!
+   (= (uInv bits i) (and
+     (<= 0 i)
+     (< i (uHi bits))
+   ))
+   :pattern ((uInv bits i))
+   :qid prelude_u_inv
+   :skolemid skolem_prelude_u_inv
+)))
+(assert
+ (forall ((bits Int) (i Int)) (!
+   (= (iInv bits i) (and
+     (<= (iLo bits) i)
+     (< i (iHi bits))
+   ))
+   :pattern ((iInv bits i))
+   :qid prelude_i_inv
+   :skolemid skolem_prelude_i_inv
+)))
+(assert
+ (forall ((i Int)) (!
+   (= (charInv i) (or
+     (and
+      (<= 0 i)
+      (<= i 55295)
+     )
+     (and
+      (<= 57344 i)
+      (<= i 1114111)
+   )))
+   :pattern ((charInv i))
+   :qid prelude_char_inv
+   :skolemid skolem_prelude_char_inv
+)))
+(assert
+ (forall ((x Int)) (!
+   (has_type (I x) INT)
+   :pattern ((has_type (I x) INT))
+   :qid prelude_has_type_int
+   :skolemid skolem_prelude_has_type_int
+)))
+(assert
+ (forall ((x Int)) (!
+   (=>
+    (<= 0 x)
+    (has_type (I x) NAT)
+   )
+   :pattern ((has_type (I x) NAT))
+   :qid prelude_has_type_nat
+   :skolemid skolem_prelude_has_type_nat
+)))
+(assert
+ (forall ((x Int)) (!
+   (=>
+    (uInv SZ x)
+    (has_type (I x) USIZE)
+   )
+   :pattern ((has_type (I x) USIZE))
+   :qid prelude_has_type_usize
+   :skolemid skolem_prelude_has_type_usize
+)))
+(assert
+ (forall ((x Int)) (!
+   (=>
+    (iInv SZ x)
+    (has_type (I x) ISIZE)
+   )
+   :pattern ((has_type (I x) ISIZE))
+   :qid prelude_has_type_isize
+   :skolemid skolem_prelude_has_type_isize
+)))
+(assert
+ (forall ((bits Int) (x Int)) (!
+   (=>
+    (uInv bits x)
+    (has_type (I x) (UINT bits))
+   )
+   :pattern ((has_type (I x) (UINT bits)))
+   :qid prelude_has_type_uint
+   :skolemid skolem_prelude_has_type_uint
+)))
+(assert
+ (forall ((bits Int) (x Int)) (!
+   (=>
+    (iInv bits x)
+    (has_type (I x) (SINT bits))
+   )
+   :pattern ((has_type (I x) (SINT bits)))
+   :qid prelude_has_type_sint
+   :skolemid skolem_prelude_has_type_sint
+)))
+(assert
+ (forall ((bits Int) (x Int)) (!
+   (=>
+    (uInv bits x)
+    (has_type (I x) (FLOAT bits))
+   )
+   :pattern ((has_type (I x) (FLOAT bits)))
+   :qid prelude_has_type_sint
+   :skolemid skolem_prelude_has_type_sint
+)))
+(assert
+ (forall ((x Int)) (!
+   (=>
+    (charInv x)
+    (has_type (I x) CHAR)
+   )
+   :pattern ((has_type (I x) CHAR))
+   :qid prelude_has_type_char
+   :skolemid skolem_prelude_has_type_char
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x NAT)
+    (<= 0 (%I x))
+   )
+   :pattern ((has_type x NAT))
+   :qid prelude_unbox_int
+   :skolemid skolem_prelude_unbox_int
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x USIZE)
+    (uInv SZ (%I x))
+   )
+   :pattern ((has_type x USIZE))
+   :qid prelude_unbox_usize
+   :skolemid skolem_prelude_unbox_usize
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x ISIZE)
+    (iInv SZ (%I x))
+   )
+   :pattern ((has_type x ISIZE))
+   :qid prelude_unbox_isize
+   :skolemid skolem_prelude_unbox_isize
+)))
+(assert
+ (forall ((bits Int) (x Poly)) (!
+   (=>
+    (has_type x (UINT bits))
+    (uInv bits (%I x))
+   )
+   :pattern ((has_type x (UINT bits)))
+   :qid prelude_unbox_uint
+   :skolemid skolem_prelude_unbox_uint
+)))
+(assert
+ (forall ((bits Int) (x Poly)) (!
+   (=>
+    (has_type x (SINT bits))
+    (iInv bits (%I x))
+   )
+   :pattern ((has_type x (SINT bits)))
+   :qid prelude_unbox_sint
+   :skolemid skolem_prelude_unbox_sint
+)))
+(assert
+ (forall ((bits Int) (x Poly)) (!
+   (=>
+    (has_type x (FLOAT bits))
+    (uInv bits (%I x))
+   )
+   :pattern ((has_type x (FLOAT bits)))
+   :qid prelude_unbox_sint
+   :skolemid skolem_prelude_unbox_sint
+)))
+(declare-fun Add (Int Int) Int)
+(declare-fun Sub (Int Int) Int)
+(declare-fun Mul (Int Int) Int)
+(declare-fun EucDiv (Int Int) Int)
+(declare-fun EucMod (Int Int) Int)
+(declare-fun RAdd (Real Real) Real)
+(declare-fun RSub (Real Real) Real)
+(declare-fun RMul (Real Real) Real)
+(declare-fun RDiv (Real Real) Real)
+(assert
+ (forall ((x Int) (y Int)) (!
+   (= (Add x y) (+ x y))
+   :pattern ((Add x y))
+   :qid prelude_add
+   :skolemid skolem_prelude_add
+)))
+(assert
+ (forall ((x Int) (y Int)) (!
+   (= (Sub x y) (- x y))
+   :pattern ((Sub x y))
+   :qid prelude_sub
+   :skolemid skolem_prelude_sub
+)))
+(assert
+ (forall ((x Int) (y Int)) (!
+   (= (Mul x y) (* x y))
+   :pattern ((Mul x y))
+   :qid prelude_mul
+   :skolemid skolem_prelude_mul
+)))
+(assert
+ (forall ((x Int) (y Int)) (!
+   (= (EucDiv x y) (div x y))
+   :pattern ((EucDiv x y))
+   :qid prelude_eucdiv
+   :skolemid skolem_prelude_eucdiv
+)))
+(assert
+ (forall ((x Int) (y Int)) (!
+   (= (EucMod x y) (mod x y))
+   :pattern ((EucMod x y))
+   :qid prelude_eucmod
+   :skolemid skolem_prelude_eucmod
+)))
+(assert
+ (forall ((x Real) (y Real)) (!
+   (= (RAdd x y) (+ x y))
+   :pattern ((RAdd x y))
+   :qid prelude_radd
+   :skolemid skolem_prelude_radd
+)))
+(assert
+ (forall ((x Real) (y Real)) (!
+   (= (RSub x y) (- x y))
+   :pattern ((RSub x y))
+   :qid prelude_rsub
+   :skolemid skolem_prelude_rsub
+)))
+(assert
+ (forall ((x Real) (y Real)) (!
+   (= (RMul x y) (* x y))
+   :pattern ((RMul x y))
+   :qid prelude_rmul
+   :skolemid skolem_prelude_rmul
+)))
+(assert
+ (forall ((x Real) (y Real)) (!
+   (= (RDiv x y) (/ x y))
+   :pattern ((RDiv x y))
+   :qid prelude_rdiv
+   :skolemid skolem_prelude_rdiv
+)))
+(assert
+ (forall ((x Int) (y Int)) (!
+   (=>
+    (and
+     (<= 0 x)
+     (<= 0 y)
+    )
+    (<= 0 (Mul x y))
+   )
+   :pattern ((Mul x y))
+   :qid prelude_mul_nats
+   :skolemid skolem_prelude_mul_nats
+)))
+(assert
+ (forall ((x Int) (y Int)) (!
+   (=>
+    (and
+     (<= 0 x)
+     (< 0 y)
+    )
+    (and
+     (<= 0 (EucDiv x y))
+     (<= (EucDiv x y) x)
+   ))
+   :pattern ((EucDiv x y))
+   :qid prelude_div_unsigned_in_bounds
+   :skolemid skolem_prelude_div_unsigned_in_bounds
+)))
+(assert
+ (forall ((x Int) (y Int)) (!
+   (=>
+    (and
+     (<= 0 x)
+     (< 0 y)
+    )
+    (and
+     (<= 0 (EucMod x y))
+     (< (EucMod x y) y)
+   ))
+   :pattern ((EucMod x y))
+   :qid prelude_mod_unsigned_in_bounds
+   :skolemid skolem_prelude_mod_unsigned_in_bounds
+)))
+(declare-fun bitxor (Poly Poly) Int)
+(declare-fun bitand (Poly Poly) Int)
+(declare-fun bitor (Poly Poly) Int)
+(declare-fun bitshr (Poly Poly) Int)
+(declare-fun bitshl (Poly Poly) Int)
+(declare-fun bitnot (Poly) Int)
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (uInv bits (%I x))
+     (uInv bits (%I y))
+    )
+    (uInv bits (bitxor x y))
+   )
+   :pattern ((uClip bits (bitxor x y)))
+   :qid prelude_bit_xor_u_inv
+   :skolemid skolem_prelude_bit_xor_u_inv
+)))
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (iInv bits (%I x))
+     (iInv bits (%I y))
+    )
+    (iInv bits (bitxor x y))
+   )
+   :pattern ((iClip bits (bitxor x y)))
+   :qid prelude_bit_xor_i_inv
+   :skolemid skolem_prelude_bit_xor_i_inv
+)))
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (uInv bits (%I x))
+     (uInv bits (%I y))
+    )
+    (uInv bits (bitor x y))
+   )
+   :pattern ((uClip bits (bitor x y)))
+   :qid prelude_bit_or_u_inv
+   :skolemid skolem_prelude_bit_or_u_inv
+)))
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (iInv bits (%I x))
+     (iInv bits (%I y))
+    )
+    (iInv bits (bitor x y))
+   )
+   :pattern ((iClip bits (bitor x y)))
+   :qid prelude_bit_or_i_inv
+   :skolemid skolem_prelude_bit_or_i_inv
+)))
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (uInv bits (%I x))
+     (uInv bits (%I y))
+    )
+    (uInv bits (bitand x y))
+   )
+   :pattern ((uClip bits (bitand x y)))
+   :qid prelude_bit_and_u_inv
+   :skolemid skolem_prelude_bit_and_u_inv
+)))
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (iInv bits (%I x))
+     (iInv bits (%I y))
+    )
+    (iInv bits (bitand x y))
+   )
+   :pattern ((iClip bits (bitand x y)))
+   :qid prelude_bit_and_i_inv
+   :skolemid skolem_prelude_bit_and_i_inv
+)))
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (uInv bits (%I x))
+     (<= 0 (%I y))
+    )
+    (uInv bits (bitshr x y))
+   )
+   :pattern ((uClip bits (bitshr x y)))
+   :qid prelude_bit_shr_u_inv
+   :skolemid skolem_prelude_bit_shr_u_inv
+)))
+(assert
+ (forall ((x Poly) (y Poly) (bits Int)) (!
+   (=>
+    (and
+     (iInv bits (%I x))
+     (<= 0 (%I y))
+    )
+    (iInv bits (bitshr x y))
+   )
+   :pattern ((iClip bits (bitshr x y)))
+   :qid prelude_bit_shr_i_inv
+   :skolemid skolem_prelude_bit_shr_i_inv
+)))
+(declare-fun singular_mod (Int Int) Int)
+(assert
+ (forall ((x Int) (y Int)) (!
+   (=>
+    (not (= y 0))
+    (= (EucMod x y) (singular_mod x y))
+   )
+   :pattern ((singular_mod x y))
+   :qid prelude_singularmod
+   :skolemid skolem_prelude_singularmod
+)))
+(declare-fun has_resolved (Dcr Type Poly) Bool)
+(declare-fun closure_req (Type Dcr Type Poly Poly) Bool)
+(declare-fun closure_ens (Type Dcr Type Poly Poly Poly) Bool)
+(declare-fun default_ens (Type Dcr Type Poly Poly Poly) Bool)
+(declare-fun height (Poly) Height)
+(declare-fun height_lt (Height Height) Bool)
+(declare-fun fun_from_recursive_field (Poly) Poly)
+(declare-fun check_decrease_int (Int Int Bool) Bool)
+(assert
+ (forall ((cur Int) (prev Int) (otherwise Bool)) (!
+   (= (check_decrease_int cur prev otherwise) (or
+     (and
+      (<= 0 cur)
+      (< cur prev)
+     )
+     (and
+      (= cur prev)
+      otherwise
+   )))
+   :pattern ((check_decrease_int cur prev otherwise))
+   :qid prelude_check_decrease_int
+   :skolemid skolem_prelude_check_decrease_int
+)))
+(declare-fun check_decrease_height (Poly Poly Bool) Bool)
+(assert
+ (forall ((cur Poly) (prev Poly) (otherwise Bool)) (!
+   (= (check_decrease_height cur prev otherwise) (or
+     (height_lt (height cur) (height prev))
+     (and
+      (= (height cur) (height prev))
+      otherwise
+   )))
+   :pattern ((check_decrease_height cur prev otherwise))
+   :qid prelude_check_decrease_height
+   :skolemid skolem_prelude_check_decrease_height
+)))
+(assert
+ (forall ((x Height) (y Height)) (!
+   (= (height_lt x y) (and
+     ((_ partial-order 0) x y)
+     (not (= x y))
+   ))
+   :pattern ((height_lt x y))
+   :qid prelude_height_lt
+   :skolemid skolem_prelude_height_lt
+)))
+
+;; MODULE 'module lemmas::common_lemmas::number_theory_lemmas'
+;; curve25519-dalek/src/lemmas/common_lemmas/number_theory_lemmas.rs:219:1: 219:49 (#0)
+
+;; query spun off because: spinoff_all
+
+;; Fuel
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_div_multiples_vanish. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mod_self_0. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mod_twice. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_add_mod_noop. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_sub_mod_noop. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mod_adds. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mod_bound. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. FuelId)
+(declare-const fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_is_associative. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_is_commutative. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_inequality. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_equality_converse. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_add. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_sub. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_strictly_positive. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_increases. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_nonnegative. FuelId)
+(declare-const fuel%vstd!arithmetic.mul.lemma_mul_unary_negation. FuelId)
+(declare-const fuel%vstd!arithmetic.power.pow. FuelId)
+(declare-const fuel%vstd!arithmetic.power.lemma_pow0. FuelId)
+(declare-const fuel%vstd!arithmetic.power.lemma_pow_positive. FuelId)
+(declare-const fuel%vstd!arithmetic.power.lemma_pow_multiplies. FuelId)
+(declare-const fuel%vstd!arithmetic.power.lemma_pow_mod_noop. FuelId)
+(declare-const fuel%vstd!arithmetic.power2.lemma_pow2_pos. FuelId)
+(declare-const fuel%vstd!arithmetic.power2.lemma_pow2_adds. FuelId)
+(declare-const fuel%vstd!arithmetic.power2.lemma_pow2_strictly_increases. FuelId)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.
+ FuelId
+)
+(declare-const fuel%curve25519_dalek!specs.field_specs_u64.p. FuelId)
+(declare-const fuel%curve25519_dalek!specs.primality_specs.is_prime. FuelId)
+(declare-const fuel%vstd!array.group_array_axioms. FuelId)
+(declare-const fuel%vstd!function.group_function_axioms. FuelId)
+(declare-const fuel%vstd!laws_cmp.group_laws_cmp. FuelId)
+(declare-const fuel%vstd!laws_eq.bool_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.u8_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.i8_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.u16_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.i16_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.u32_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.i32_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.u64_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.i64_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.u128_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.i128_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.usize_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.isize_laws.group_laws_eq. FuelId)
+(declare-const fuel%vstd!laws_eq.group_laws_eq. FuelId)
+(declare-const fuel%vstd!layout.group_layout_axioms. FuelId)
+(declare-const fuel%vstd!map.group_map_axioms. FuelId)
+(declare-const fuel%vstd!multiset.group_multiset_axioms. FuelId)
+(declare-const fuel%vstd!raw_ptr.group_raw_ptr_axioms. FuelId)
+(declare-const fuel%vstd!seq.group_seq_axioms. FuelId)
+(declare-const fuel%vstd!seq_lib.group_filter_ensures. FuelId)
+(declare-const fuel%vstd!seq_lib.group_seq_lib_default. FuelId)
+(declare-const fuel%vstd!set.group_set_axioms. FuelId)
+(declare-const fuel%vstd!set_lib.group_set_lib_default. FuelId)
+(declare-const fuel%vstd!slice.group_slice_axioms. FuelId)
+(declare-const fuel%vstd!string.group_string_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.bits.group_bits_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.control_flow.group_control_flow_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.manually_drop.group_manually_drop_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.hash.group_hash_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.range.group_range_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.slice.group_slice_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.vec.group_vec_axioms. FuelId)
+(declare-const fuel%vstd!std_specs.vecdeque.group_vec_dequeue_axioms. FuelId)
+(declare-const fuel%vstd!group_vstd_default. FuelId)
+(assert
+ (distinct fuel%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. fuel%vstd!arithmetic.div_mod.lemma_div_multiples_vanish.
+  fuel%vstd!arithmetic.div_mod.lemma_mod_self_0. fuel%vstd!arithmetic.div_mod.lemma_mod_twice.
+  fuel%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. fuel%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish.
+  fuel%vstd!arithmetic.div_mod.lemma_add_mod_noop. fuel%vstd!arithmetic.div_mod.lemma_sub_mod_noop.
+  fuel%vstd!arithmetic.div_mod.lemma_mod_adds. fuel%vstd!arithmetic.div_mod.lemma_mod_bound.
+  fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right.
+  fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop.
+  fuel%vstd!arithmetic.mul.lemma_mul_is_associative. fuel%vstd!arithmetic.mul.lemma_mul_is_commutative.
+  fuel%vstd!arithmetic.mul.lemma_mul_inequality. fuel%vstd!arithmetic.mul.lemma_mul_equality_converse.
+  fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_add. fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_sub.
+  fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way. fuel%vstd!arithmetic.mul.lemma_mul_strictly_positive.
+  fuel%vstd!arithmetic.mul.lemma_mul_increases. fuel%vstd!arithmetic.mul.lemma_mul_nonnegative.
+  fuel%vstd!arithmetic.mul.lemma_mul_unary_negation. fuel%vstd!arithmetic.power.pow.
+  fuel%vstd!arithmetic.power.lemma_pow0. fuel%vstd!arithmetic.power.lemma_pow_positive.
+  fuel%vstd!arithmetic.power.lemma_pow_multiplies. fuel%vstd!arithmetic.power.lemma_pow_mod_noop.
+  fuel%vstd!arithmetic.power2.lemma_pow2_pos. fuel%vstd!arithmetic.power2.lemma_pow2_adds.
+  fuel%vstd!arithmetic.power2.lemma_pow2_strictly_increases. fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.
+  fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial. fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.
+  fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum. fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.
+  fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.
+  fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.
+  fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.
+  fuel%curve25519_dalek!specs.field_specs_u64.p. fuel%curve25519_dalek!specs.primality_specs.is_prime.
+  fuel%vstd!array.group_array_axioms. fuel%vstd!function.group_function_axioms. fuel%vstd!laws_cmp.group_laws_cmp.
+  fuel%vstd!laws_eq.bool_laws.group_laws_eq. fuel%vstd!laws_eq.u8_laws.group_laws_eq.
+  fuel%vstd!laws_eq.i8_laws.group_laws_eq. fuel%vstd!laws_eq.u16_laws.group_laws_eq.
+  fuel%vstd!laws_eq.i16_laws.group_laws_eq. fuel%vstd!laws_eq.u32_laws.group_laws_eq.
+  fuel%vstd!laws_eq.i32_laws.group_laws_eq. fuel%vstd!laws_eq.u64_laws.group_laws_eq.
+  fuel%vstd!laws_eq.i64_laws.group_laws_eq. fuel%vstd!laws_eq.u128_laws.group_laws_eq.
+  fuel%vstd!laws_eq.i128_laws.group_laws_eq. fuel%vstd!laws_eq.usize_laws.group_laws_eq.
+  fuel%vstd!laws_eq.isize_laws.group_laws_eq. fuel%vstd!laws_eq.group_laws_eq. fuel%vstd!layout.group_layout_axioms.
+  fuel%vstd!map.group_map_axioms. fuel%vstd!multiset.group_multiset_axioms. fuel%vstd!raw_ptr.group_raw_ptr_axioms.
+  fuel%vstd!seq.group_seq_axioms. fuel%vstd!seq_lib.group_filter_ensures. fuel%vstd!seq_lib.group_seq_lib_default.
+  fuel%vstd!set.group_set_axioms. fuel%vstd!set_lib.group_set_lib_default. fuel%vstd!slice.group_slice_axioms.
+  fuel%vstd!string.group_string_axioms. fuel%vstd!std_specs.bits.group_bits_axioms.
+  fuel%vstd!std_specs.control_flow.group_control_flow_axioms. fuel%vstd!std_specs.manually_drop.group_manually_drop_axioms.
+  fuel%vstd!std_specs.hash.group_hash_axioms. fuel%vstd!std_specs.range.group_range_axioms.
+  fuel%vstd!std_specs.slice.group_slice_axioms. fuel%vstd!std_specs.vec.group_vec_axioms.
+  fuel%vstd!std_specs.vecdeque.group_vec_dequeue_axioms. fuel%vstd!group_vstd_default.
+))
+(assert
+ (=>
+  (fuel_bool_default fuel%vstd!laws_eq.group_laws_eq.)
+  (and
+   (fuel_bool_default fuel%vstd!laws_eq.bool_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.u8_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.i8_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.u16_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.i16_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.u32_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.i32_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.u64_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.i64_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.u128_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.i128_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.usize_laws.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_eq.isize_laws.group_laws_eq.)
+)))
+(assert
+ (=>
+  (fuel_bool_default fuel%vstd!seq_lib.group_seq_lib_default.)
+  (fuel_bool_default fuel%vstd!seq_lib.group_filter_ensures.)
+))
+(assert
+ (fuel_bool_default fuel%vstd!group_vstd_default.)
+)
+(assert
+ (=>
+  (fuel_bool_default fuel%vstd!group_vstd_default.)
+  (and
+   (fuel_bool_default fuel%vstd!seq.group_seq_axioms.)
+   (fuel_bool_default fuel%vstd!seq_lib.group_seq_lib_default.)
+   (fuel_bool_default fuel%vstd!map.group_map_axioms.)
+   (fuel_bool_default fuel%vstd!set.group_set_axioms.)
+   (fuel_bool_default fuel%vstd!set_lib.group_set_lib_default.)
+   (fuel_bool_default fuel%vstd!multiset.group_multiset_axioms.)
+   (fuel_bool_default fuel%vstd!function.group_function_axioms.)
+   (fuel_bool_default fuel%vstd!laws_eq.group_laws_eq.)
+   (fuel_bool_default fuel%vstd!laws_cmp.group_laws_cmp.)
+   (fuel_bool_default fuel%vstd!slice.group_slice_axioms.)
+   (fuel_bool_default fuel%vstd!array.group_array_axioms.)
+   (fuel_bool_default fuel%vstd!string.group_string_axioms.)
+   (fuel_bool_default fuel%vstd!raw_ptr.group_raw_ptr_axioms.)
+   (fuel_bool_default fuel%vstd!layout.group_layout_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.range.group_range_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.bits.group_bits_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.control_flow.group_control_flow_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.slice.group_slice_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.manually_drop.group_manually_drop_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.vec.group_vec_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.vecdeque.group_vec_dequeue_axioms.)
+   (fuel_bool_default fuel%vstd!std_specs.hash.group_hash_axioms.)
+)))
+
+;; Datatypes
+(declare-datatypes ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+   0
+  ) (tuple%0. 0)
+ ) (((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult
+    (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/?gcd
+     Int
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/?x
+     Int
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/?y
+     Int
+   ))
+  ) ((tuple%0./tuple%0))
+))
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd
+ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/x
+ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/y
+ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.) Int
+)
+(declare-const TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+ Type
+)
+(declare-fun Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.) Poly
+)
+(declare-fun %Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+ (Poly) curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+)
+(declare-fun Poly%tuple%0. (tuple%0.) Poly)
+(declare-fun %Poly%tuple%0. (Poly) tuple%0.)
+(assert
+ (forall ((x curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.))
+  (!
+   (= x (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+     (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. x)
+   ))
+   :pattern ((Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+     x
+   ))
+   :qid internal_curve25519_dalek__lemmas__common_lemmas__number_theory_lemmas__ExtGcdResult_box_axiom_definition
+   :skolemid skolem_internal_curve25519_dalek__lemmas__common_lemmas__number_theory_lemmas__ExtGcdResult_box_axiom_definition
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.)
+    (= x (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+      (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. x)
+   )))
+   :pattern ((has_type x TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.))
+   :qid internal_curve25519_dalek__lemmas__common_lemmas__number_theory_lemmas__ExtGcdResult_unbox_axiom_definition
+   :skolemid skolem_internal_curve25519_dalek__lemmas__common_lemmas__number_theory_lemmas__ExtGcdResult_unbox_axiom_definition
+)))
+(assert
+ (forall ((_gcd! Int) (_x! Int) (_y! Int)) (!
+   (=>
+    (<= 0 _gcd!)
+    (has_type (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+      (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult
+       _gcd! _x! _y!
+      )
+     ) TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+   ))
+   :pattern ((has_type (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+      (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult
+       _gcd! _x! _y!
+      )
+     ) TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult_constructor_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult_constructor_definition
+)))
+(assert
+ (forall ((x curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.))
+  (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd
+     x
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/?gcd
+     x
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd
+     x
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd_accessor_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd_accessor_definition
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.)
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd
+      (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. x)
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd
+     (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. x)
+    ) (has_type x TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.)
+   )
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd_invariant_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd_invariant_definition
+)))
+(assert
+ (forall ((x curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.))
+  (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/x
+     x
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/?x
+     x
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/x
+     x
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/x_accessor_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/x_accessor_definition
+)))
+(assert
+ (forall ((x curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.))
+  (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/y
+     x
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/?y
+     x
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/y
+     x
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/y_accessor_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/y_accessor_definition
+)))
+(assert
+ (forall ((x tuple%0.)) (!
+   (= x (%Poly%tuple%0. (Poly%tuple%0. x)))
+   :pattern ((Poly%tuple%0. x))
+   :qid internal_crate__tuple__0_box_axiom_definition
+   :skolemid skolem_internal_crate__tuple__0_box_axiom_definition
+)))
+(assert
+ (forall ((x Poly)) (!
+   (=>
+    (has_type x TYPE%tuple%0.)
+    (= x (Poly%tuple%0. (%Poly%tuple%0. x)))
+   )
+   :pattern ((has_type x TYPE%tuple%0.))
+   :qid internal_crate__tuple__0_unbox_axiom_definition
+   :skolemid skolem_internal_crate__tuple__0_unbox_axiom_definition
+)))
+(assert
+ (forall ((x tuple%0.)) (!
+   (has_type (Poly%tuple%0. x) TYPE%tuple%0.)
+   :pattern ((has_type (Poly%tuple%0. x) TYPE%tuple%0.))
+   :qid internal_crate__tuple__0_has_type_always_definition
+   :skolemid skolem_internal_crate__tuple__0_has_type_always_definition
+)))
+
+;; Function-Decl vstd::arithmetic::power::pow
+(declare-fun vstd!arithmetic.power.pow.? (Poly Poly) Int)
+(declare-fun vstd!arithmetic.power.rec%pow.? (Poly Poly Fuel) Int)
+
+;; Function-Decl vstd::arithmetic::power2::pow2
+(declare-fun vstd!arithmetic.power2.pow2.? (Poly) Int)
+
+;; Function-Decl curve25519_dalek::specs::field_specs_u64::p
+(declare-fun curve25519_dalek!specs.field_specs_u64.p.? (Poly) Int)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::spec_gcd
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?
+ (Poly Poly) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.?
+ (Poly Poly Fuel) Int
+)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::spec_extended_gcd
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?
+ (Poly Poly) curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+ (Poly Poly Fuel) curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::spec_mod_inverse
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?
+ (Poly Poly) Int
+)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::factorial
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.?
+ (Poly) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.?
+ (Poly Fuel) Int
+)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::binomial
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.?
+ (Poly Poly) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.?
+ (Poly Poly Fuel) Int
+)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::binomial_sum
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.?
+ (Poly Poly Poly) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.?
+ (Poly Poly Poly Fuel) Int
+)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::shifted_binomial_sum
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?
+ (Poly Poly Poly) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+ (Poly Poly Poly Fuel) Int
+)
+
+;; Function-Decl curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::product_of_multiples
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?
+ (Poly Poly) Int
+)
+(declare-fun curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+ (Poly Poly Fuel) Int
+)
+
+;; Function-Decl curve25519_dalek::specs::primality_specs::is_prime
+(declare-fun curve25519_dalek!specs.primality_specs.is_prime.? (Poly) Bool)
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_small_mod
+(declare-fun req%vstd!arithmetic.div_mod.lemma_small_mod. (Int Int) Bool)
+(declare-const %%global_location_label%%0 Bool)
+(declare-const %%global_location_label%%1 Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_small_mod. x! m!) (and
+     (=>
+      %%global_location_label%%0
+      (< x! m!)
+     )
+     (=>
+      %%global_location_label%%1
+      (< 0 m!)
+   )))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_small_mod. x! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_small_mod._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_small_mod._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_small_mod. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_small_mod. x! m!) (= (EucMod x! m!) x!))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_small_mod. x! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_small_mod._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_small_mod._definition
+)))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_fundamental_div_mod
+(declare-fun req%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. (Int Int) Bool)
+(declare-const %%global_location_label%%2 Bool)
+(assert
+ (forall ((x! Int) (d! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. x! d!) (=>
+     %%global_location_label%%2
+     (not (= d! 0))
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. x! d!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_fundamental_div_mod._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_fundamental_div_mod._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (d! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. x! d!) (= x! (Add (Mul d!
+       (EucDiv x! d!)
+      ) (EucMod x! d!)
+   )))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_fundamental_div_mod. x! d!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_fundamental_div_mod._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_fundamental_div_mod._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_fundamental_div_mod
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_fundamental_div_mod.)
+  (forall ((x! Int) (d! Int)) (!
+    (=>
+     (not (= d! 0))
+     (= x! (Add (Mul d! (EucDiv x! d!)) (EucMod x! d!)))
+    )
+    :pattern ((Add (Mul d! (EucDiv x! d!)) (EucMod x! d!)))
+    :qid user_vstd__arithmetic__div_mod__lemma_fundamental_div_mod_0
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_fundamental_div_mod_0
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_div_multiples_vanish
+(declare-fun req%vstd!arithmetic.div_mod.lemma_div_multiples_vanish. (Int Int) Bool)
+(declare-const %%global_location_label%%3 Bool)
+(assert
+ (forall ((x! Int) (d! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_div_multiples_vanish. x! d!) (=>
+     %%global_location_label%%3
+     (< 0 d!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_div_multiples_vanish. x! d!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_div_multiples_vanish._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_div_multiples_vanish._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_div_multiples_vanish. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (d! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_div_multiples_vanish. x! d!) (= (EucDiv (Mul d!
+       x!
+      ) d!
+     ) x!
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_div_multiples_vanish. x! d!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_div_multiples_vanish._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_div_multiples_vanish._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_div_multiples_vanish
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_div_multiples_vanish.)
+  (forall ((x! Int) (d! Int)) (!
+    (=>
+     (< 0 d!)
+     (= (EucDiv (Mul d! x!) d!) x!)
+    )
+    :pattern ((EucDiv (Mul d! x!) d!))
+    :qid user_vstd__arithmetic__div_mod__lemma_div_multiples_vanish_1
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_div_multiples_vanish_1
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mod_self_0
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mod_self_0. (Int) Bool)
+(declare-const %%global_location_label%%4 Bool)
+(assert
+ (forall ((m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mod_self_0. m!) (=>
+     %%global_location_label%%4
+     (> m! 0)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mod_self_0. m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mod_self_0._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mod_self_0._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mod_self_0. (Int) Bool)
+(assert
+ (forall ((m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mod_self_0. m!) (= (EucMod m! m!) 0))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mod_self_0. m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mod_self_0._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mod_self_0._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mod_self_0
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mod_self_0.)
+  (forall ((m! Int)) (!
+    (=>
+     (> m! 0)
+     (= (EucMod m! m!) 0)
+    )
+    :pattern ((EucMod m! m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mod_self_0_2
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mod_self_0_2
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mod_twice
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mod_twice. (Int Int) Bool)
+(declare-const %%global_location_label%%5 Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mod_twice. x! m!) (=>
+     %%global_location_label%%5
+     (> m! 0)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mod_twice. x! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mod_twice._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mod_twice._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mod_twice. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mod_twice. x! m!) (= (EucMod (EucMod x! m!) m!)
+     (EucMod x! m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mod_twice. x! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mod_twice._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mod_twice._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mod_twice
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mod_twice.)
+  (forall ((x! Int) (m! Int)) (!
+    (=>
+     (> m! 0)
+     (= (EucMod (EucMod x! m!) m!) (EucMod x! m!))
+    )
+    :pattern ((EucMod (EucMod x! m!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mod_twice_3
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mod_twice_3
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mod_multiples_basic
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. (Int Int) Bool)
+(declare-const %%global_location_label%%6 Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. x! m!) (=>
+     %%global_location_label%%6
+     (> m! 0)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. x! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mod_multiples_basic._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mod_multiples_basic._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. x! m!) (= (EucMod (Mul x!
+       m!
+      ) m!
+     ) 0
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mod_multiples_basic. x! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mod_multiples_basic._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mod_multiples_basic._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mod_multiples_basic
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mod_multiples_basic.)
+  (forall ((x! Int) (m! Int)) (!
+    (=>
+     (> m! 0)
+     (= (EucMod (Mul x! m!) m!) 0)
+    )
+    :pattern ((EucMod (Mul x! m!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mod_multiples_basic_4
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mod_multiples_basic_4
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mod_multiples_vanish
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish. (Int Int Int)
+ Bool
+)
+(declare-const %%global_location_label%%7 Bool)
+(assert
+ (forall ((a! Int) (b! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish. a! b! m!) (=>
+     %%global_location_label%%7
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish. a! b! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mod_multiples_vanish._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mod_multiples_vanish._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish. (Int Int Int)
+ Bool
+)
+(assert
+ (forall ((a! Int) (b! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish. a! b! m!) (= (EucMod (Add
+       (Mul m! a!) b!
+      ) m!
+     ) (EucMod b! m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish. a! b! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mod_multiples_vanish._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mod_multiples_vanish._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mod_multiples_vanish
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mod_multiples_vanish.)
+  (forall ((a! Int) (b! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (= (EucMod (Add (Mul m! a!) b!) m!) (EucMod b! m!))
+    )
+    :pattern ((EucMod (Add (Mul m! a!) b!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mod_multiples_vanish_5
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mod_multiples_vanish_5
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_add_mod_noop
+(declare-fun req%vstd!arithmetic.div_mod.lemma_add_mod_noop. (Int Int Int) Bool)
+(declare-const %%global_location_label%%8 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_add_mod_noop. x! y! m!) (=>
+     %%global_location_label%%8
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_add_mod_noop. x! y! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_add_mod_noop._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_add_mod_noop._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_add_mod_noop. (Int Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_add_mod_noop. x! y! m!) (= (EucMod (Add (EucMod
+        x! m!
+       ) (EucMod y! m!)
+      ) m!
+     ) (EucMod (Add x! y!) m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_add_mod_noop. x! y! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_add_mod_noop._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_add_mod_noop._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_add_mod_noop
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_add_mod_noop.)
+  (forall ((x! Int) (y! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (= (EucMod (Add (EucMod x! m!) (EucMod y! m!)) m!) (EucMod (Add x! y!) m!))
+    )
+    :pattern ((EucMod (Add x! y!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_add_mod_noop_6
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_add_mod_noop_6
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_sub_mod_noop
+(declare-fun req%vstd!arithmetic.div_mod.lemma_sub_mod_noop. (Int Int Int) Bool)
+(declare-const %%global_location_label%%9 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_sub_mod_noop. x! y! m!) (=>
+     %%global_location_label%%9
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_sub_mod_noop. x! y! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_sub_mod_noop._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_sub_mod_noop._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_sub_mod_noop. (Int Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_sub_mod_noop. x! y! m!) (= (EucMod (Sub (EucMod
+        x! m!
+       ) (EucMod y! m!)
+      ) m!
+     ) (EucMod (Sub x! y!) m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_sub_mod_noop. x! y! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_sub_mod_noop._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_sub_mod_noop._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_sub_mod_noop
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_sub_mod_noop.)
+  (forall ((x! Int) (y! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (= (EucMod (Sub (EucMod x! m!) (EucMod y! m!)) m!) (EucMod (Sub x! y!) m!))
+    )
+    :pattern ((EucMod (Sub x! y!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_sub_mod_noop_7
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_sub_mod_noop_7
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mod_adds
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mod_adds. (Int Int Int) Bool)
+(declare-const %%global_location_label%%10 Bool)
+(assert
+ (forall ((a! Int) (b! Int) (d! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mod_adds. a! b! d!) (=>
+     %%global_location_label%%10
+     (< 0 d!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mod_adds. a! b! d!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mod_adds._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mod_adds._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mod_adds. (Int Int Int) Bool)
+(assert
+ (forall ((a! Int) (b! Int) (d! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mod_adds. a! b! d!) (and
+     (= (Add (EucMod a! d!) (EucMod b! d!)) (Add (EucMod (Add a! b!) d!) (Mul d! (EucDiv (
+          Add (EucMod a! d!) (EucMod b! d!)
+         ) d!
+     ))))
+     (=>
+      (< (Add (EucMod a! d!) (EucMod b! d!)) d!)
+      (= (Add (EucMod a! d!) (EucMod b! d!)) (EucMod (Add a! b!) d!))
+   )))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mod_adds. a! b! d!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mod_adds._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mod_adds._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mod_adds
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mod_adds.)
+  (forall ((a! Int) (b! Int) (d! Int)) (!
+    (=>
+     (< 0 d!)
+     (and
+      (= (Add (EucMod a! d!) (EucMod b! d!)) (Add (EucMod (Add a! b!) d!) (Mul d! (EucDiv (
+           Add (EucMod a! d!) (EucMod b! d!)
+          ) d!
+      ))))
+      (=>
+       (< (Add (EucMod a! d!) (EucMod b! d!)) d!)
+       (= (Add (EucMod a! d!) (EucMod b! d!)) (EucMod (Add a! b!) d!))
+    )))
+    :pattern ((EucMod (Add a! b!) d!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mod_adds_8
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mod_adds_8
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mod_bound
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mod_bound. (Int Int) Bool)
+(declare-const %%global_location_label%%11 Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mod_bound. x! m!) (=>
+     %%global_location_label%%11
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mod_bound. x! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mod_bound._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mod_bound._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mod_bound. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mod_bound. x! m!) (let
+     ((tmp%%$ (EucMod x! m!)))
+     (and
+      (<= 0 tmp%%$)
+      (< tmp%%$ m!)
+   )))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mod_bound. x! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mod_bound._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mod_bound._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mod_bound
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mod_bound.)
+  (forall ((x! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (let
+      ((tmp%%$ (EucMod x! m!)))
+      (and
+       (<= 0 tmp%%$)
+       (< tmp%%$ m!)
+    )))
+    :pattern ((EucMod x! m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mod_bound_9
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mod_bound_9
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mul_mod_noop_left
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. (Int Int Int) Bool)
+(declare-const %%global_location_label%%12 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. x! y! m!) (=>
+     %%global_location_label%%12
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. x! y! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop_left._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop_left._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. (Int Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. x! y! m!) (= (EucMod (Mul (EucMod
+        x! m!
+       ) y!
+      ) m!
+     ) (EucMod (Mul x! y!) m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left. x! y! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop_left._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop_left._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mul_mod_noop_left
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_left.)
+  (forall ((x! Int) (y! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (= (EucMod (Mul (EucMod x! m!) y!) m!) (EucMod (Mul x! y!) m!))
+    )
+    :pattern ((EucMod (Mul x! y!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_left_10
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_left_10
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mul_mod_noop_right
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right. (Int Int Int) Bool)
+(declare-const %%global_location_label%%13 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right. x! y! m!) (=>
+     %%global_location_label%%13
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right. x! y! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop_right._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop_right._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right. (Int Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right. x! y! m!) (= (EucMod (Mul x!
+       (EucMod y! m!)
+      ) m!
+     ) (EucMod (Mul x! y!) m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right. x! y! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop_right._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop_right._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mul_mod_noop_right
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_right.)
+  (forall ((x! Int) (y! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (= (EucMod (Mul x! (EucMod y! m!)) m!) (EucMod (Mul x! y!) m!))
+    )
+    :pattern ((EucMod (Mul x! y!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_right_11
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_right_11
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mul_mod_noop_general
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. (Int Int Int)
+ Bool
+)
+(declare-const %%global_location_label%%14 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. x! y! m!) (=>
+     %%global_location_label%%14
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. x! y! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop_general._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop_general._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. (Int Int Int)
+ Bool
+)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. x! y! m!) (and
+     (= (EucMod (Mul (EucMod x! m!) y!) m!) (EucMod (Mul x! y!) m!))
+     (= (EucMod (Mul x! (EucMod y! m!)) m!) (EucMod (Mul x! y!) m!))
+     (= (EucMod (Mul (EucMod x! m!) (EucMod y! m!)) m!) (EucMod (Mul x! y!) m!))
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general. x! y! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop_general._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop_general._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mul_mod_noop_general
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop_general.)
+  (forall ((x! Int) (y! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (and
+      (and
+       (= (EucMod (Mul (EucMod x! m!) y!) m!) (EucMod (Mul x! y!) m!))
+       (= (EucMod (Mul x! (EucMod y! m!)) m!) (EucMod (Mul x! y!) m!))
+      )
+      (= (EucMod (Mul (EucMod x! m!) (EucMod y! m!)) m!) (EucMod (Mul x! y!) m!))
+    ))
+    :pattern ((EucMod (Mul x! y!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_general_12
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_general_12
+))))
+
+;; Function-Specs vstd::arithmetic::div_mod::lemma_mul_mod_noop
+(declare-fun req%vstd!arithmetic.div_mod.lemma_mul_mod_noop. (Int Int Int) Bool)
+(declare-const %%global_location_label%%15 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.div_mod.lemma_mul_mod_noop. x! y! m!) (=>
+     %%global_location_label%%15
+     (< 0 m!)
+   ))
+   :pattern ((req%vstd!arithmetic.div_mod.lemma_mul_mod_noop. x! y! m!))
+   :qid internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.div_mod.lemma_mul_mod_noop._definition
+)))
+(declare-fun ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop. (Int Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop. x! y! m!) (= (EucMod (Mul (EucMod
+        x! m!
+       ) (EucMod y! m!)
+      ) m!
+     ) (EucMod (Mul x! y!) m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.div_mod.lemma_mul_mod_noop. x! y! m!))
+   :qid internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.div_mod.lemma_mul_mod_noop._definition
+)))
+
+;; Broadcast vstd::arithmetic::div_mod::lemma_mul_mod_noop
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.div_mod.lemma_mul_mod_noop.)
+  (forall ((x! Int) (y! Int) (m! Int)) (!
+    (=>
+     (< 0 m!)
+     (= (EucMod (Mul (EucMod x! m!) (EucMod y! m!)) m!) (EucMod (Mul x! y!) m!))
+    )
+    :pattern ((EucMod (Mul x! y!) m!))
+    :qid user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_13
+    :skolemid skolem_user_vstd__arithmetic__div_mod__lemma_mul_mod_noop_13
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_basics
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_basics. (Int) Bool)
+(assert
+ (forall ((x! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_basics. x!) (and
+     (= (Mul 0 x!) 0)
+     (= (Mul x! 0) 0)
+     (= (Mul x! 1) x!)
+     (= (Mul 1 x!) x!)
+   ))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_basics. x!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_basics._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_basics._definition
+)))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_is_associative
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_is_associative. (Int Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int) (z! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_is_associative. x! y! z!) (= (Mul x! (Mul y! z!))
+     (Mul (Mul x! y!) z!)
+   ))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_is_associative. x! y! z!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_is_associative._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_is_associative._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_is_associative
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_is_associative.)
+  (forall ((x! Int) (y! Int) (z! Int)) (!
+    (= (Mul x! (Mul y! z!)) (Mul (Mul x! y!) z!))
+    :pattern ((Mul x! (Mul y! z!)))
+    :pattern ((Mul (Mul x! y!) z!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_is_associative_14
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_is_associative_14
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_is_commutative
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_is_commutative. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_is_commutative. x! y!) (= (Mul x! y!) (Mul y!
+      x!
+   )))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_is_commutative. x! y!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_is_commutative._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_is_commutative._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_is_commutative
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_is_commutative.)
+  (forall ((x! Int) (y! Int)) (!
+    (= (Mul x! y!) (Mul y! x!))
+    :pattern ((Mul x! y!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_is_commutative_15
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_is_commutative_15
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_inequality
+(declare-fun req%vstd!arithmetic.mul.lemma_mul_inequality. (Int Int Int) Bool)
+(declare-const %%global_location_label%%16 Bool)
+(declare-const %%global_location_label%%17 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (z! Int)) (!
+   (= (req%vstd!arithmetic.mul.lemma_mul_inequality. x! y! z!) (and
+     (=>
+      %%global_location_label%%16
+      (<= x! y!)
+     )
+     (=>
+      %%global_location_label%%17
+      (>= z! 0)
+   )))
+   :pattern ((req%vstd!arithmetic.mul.lemma_mul_inequality. x! y! z!))
+   :qid internal_req__vstd!arithmetic.mul.lemma_mul_inequality._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.mul.lemma_mul_inequality._definition
+)))
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_inequality. (Int Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int) (z! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_inequality. x! y! z!) (<= (Mul x! z!) (Mul y!
+      z!
+   )))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_inequality. x! y! z!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_inequality._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_inequality._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_inequality
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_inequality.)
+  (forall ((x! Int) (y! Int) (z! Int)) (!
+    (=>
+     (and
+      (<= x! y!)
+      (>= z! 0)
+     )
+     (<= (Mul x! z!) (Mul y! z!))
+    )
+    :pattern ((Mul x! z!) (Mul y! z!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_inequality_16
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_inequality_16
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_equality_converse
+(declare-fun req%vstd!arithmetic.mul.lemma_mul_equality_converse. (Int Int Int) Bool)
+(declare-const %%global_location_label%%18 Bool)
+(declare-const %%global_location_label%%19 Bool)
+(assert
+ (forall ((m! Int) (x! Int) (y! Int)) (!
+   (= (req%vstd!arithmetic.mul.lemma_mul_equality_converse. m! x! y!) (and
+     (=>
+      %%global_location_label%%18
+      (not (= m! 0))
+     )
+     (=>
+      %%global_location_label%%19
+      (= (Mul m! x!) (Mul m! y!))
+   )))
+   :pattern ((req%vstd!arithmetic.mul.lemma_mul_equality_converse. m! x! y!))
+   :qid internal_req__vstd!arithmetic.mul.lemma_mul_equality_converse._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.mul.lemma_mul_equality_converse._definition
+)))
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_equality_converse. (Int Int Int) Bool)
+(assert
+ (forall ((m! Int) (x! Int) (y! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_equality_converse. m! x! y!) (= x! y!))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_equality_converse. m! x! y!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_equality_converse._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_equality_converse._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_equality_converse
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_equality_converse.)
+  (forall ((m! Int) (x! Int) (y! Int)) (!
+    (=>
+     (and
+      (not (= m! 0))
+      (= (Mul m! x!) (Mul m! y!))
+     )
+     (= x! y!)
+    )
+    :pattern ((Mul m! x!) (Mul m! y!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_equality_converse_17
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_equality_converse_17
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_is_distributive_add
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_is_distributive_add. (Int Int Int)
+ Bool
+)
+(assert
+ (forall ((x! Int) (y! Int) (z! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_is_distributive_add. x! y! z!) (= (Mul x! (Add
+       y! z!
+      )
+     ) (Add (Mul x! y!) (Mul x! z!))
+   ))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_is_distributive_add. x! y! z!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_is_distributive_add._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_is_distributive_add._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_is_distributive_add
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_add.)
+  (forall ((x! Int) (y! Int) (z! Int)) (!
+    (= (Mul x! (Add y! z!)) (Add (Mul x! y!) (Mul x! z!)))
+    :pattern ((Mul x! (Add y! z!)))
+    :qid user_vstd__arithmetic__mul__lemma_mul_is_distributive_add_18
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_is_distributive_add_18
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_is_distributive_sub
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_is_distributive_sub. (Int Int Int)
+ Bool
+)
+(assert
+ (forall ((x! Int) (y! Int) (z! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_is_distributive_sub. x! y! z!) (= (Mul x! (Sub
+       y! z!
+      )
+     ) (Sub (Mul x! y!) (Mul x! z!))
+   ))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_is_distributive_sub. x! y! z!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_is_distributive_sub._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_is_distributive_sub._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_is_distributive_sub
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_sub.)
+  (forall ((x! Int) (y! Int) (z! Int)) (!
+    (= (Mul x! (Sub y! z!)) (Sub (Mul x! y!) (Mul x! z!)))
+    :pattern ((Mul x! (Sub y! z!)))
+    :qid user_vstd__arithmetic__mul__lemma_mul_is_distributive_sub_19
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_is_distributive_sub_19
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_is_distributive_sub_other_way
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way. (Int
+  Int Int
+ ) Bool
+)
+(assert
+ (forall ((x! Int) (y! Int) (z! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way. x! y! z!) (= (
+      Mul (Sub y! z!) x!
+     ) (Sub (Mul y! x!) (Mul z! x!))
+   ))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way. x! y! z!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_is_distributive_sub_other_way
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_is_distributive_sub_other_way.)
+  (forall ((x! Int) (y! Int) (z! Int)) (!
+    (= (Mul (Sub y! z!) x!) (Sub (Mul y! x!) (Mul z! x!)))
+    :pattern ((Mul (Sub y! z!) x!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_is_distributive_sub_other_way_20
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_is_distributive_sub_other_way_20
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_strictly_positive
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_strictly_positive. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_strictly_positive. x! y!) (=>
+     (and
+      (< 0 x!)
+      (< 0 y!)
+     )
+     (< 0 (Mul x! y!))
+   ))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_strictly_positive. x! y!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_strictly_positive._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_strictly_positive._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_strictly_positive
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_strictly_positive.)
+  (forall ((x! Int) (y! Int)) (!
+    (=>
+     (and
+      (< 0 x!)
+      (< 0 y!)
+     )
+     (< 0 (Mul x! y!))
+    )
+    :pattern ((Mul x! y!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_strictly_positive_21
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_strictly_positive_21
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_increases
+(declare-fun req%vstd!arithmetic.mul.lemma_mul_increases. (Int Int) Bool)
+(declare-const %%global_location_label%%20 Bool)
+(declare-const %%global_location_label%%21 Bool)
+(assert
+ (forall ((x! Int) (y! Int)) (!
+   (= (req%vstd!arithmetic.mul.lemma_mul_increases. x! y!) (and
+     (=>
+      %%global_location_label%%20
+      (< 0 x!)
+     )
+     (=>
+      %%global_location_label%%21
+      (< 0 y!)
+   )))
+   :pattern ((req%vstd!arithmetic.mul.lemma_mul_increases. x! y!))
+   :qid internal_req__vstd!arithmetic.mul.lemma_mul_increases._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.mul.lemma_mul_increases._definition
+)))
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_increases. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_increases. x! y!) (<= y! (Mul x! y!)))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_increases. x! y!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_increases._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_increases._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_increases
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_increases.)
+  (forall ((x! Int) (y! Int)) (!
+    (=>
+     (and
+      (< 0 x!)
+      (< 0 y!)
+     )
+     (<= y! (Mul x! y!))
+    )
+    :pattern ((Mul x! y!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_increases_22
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_increases_22
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_nonnegative
+(declare-fun req%vstd!arithmetic.mul.lemma_mul_nonnegative. (Int Int) Bool)
+(declare-const %%global_location_label%%22 Bool)
+(declare-const %%global_location_label%%23 Bool)
+(assert
+ (forall ((x! Int) (y! Int)) (!
+   (= (req%vstd!arithmetic.mul.lemma_mul_nonnegative. x! y!) (and
+     (=>
+      %%global_location_label%%22
+      (<= 0 x!)
+     )
+     (=>
+      %%global_location_label%%23
+      (<= 0 y!)
+   )))
+   :pattern ((req%vstd!arithmetic.mul.lemma_mul_nonnegative. x! y!))
+   :qid internal_req__vstd!arithmetic.mul.lemma_mul_nonnegative._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.mul.lemma_mul_nonnegative._definition
+)))
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_nonnegative. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_nonnegative. x! y!) (<= 0 (Mul x! y!)))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_nonnegative. x! y!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_nonnegative._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_nonnegative._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_nonnegative
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_nonnegative.)
+  (forall ((x! Int) (y! Int)) (!
+    (=>
+     (and
+      (<= 0 x!)
+      (<= 0 y!)
+     )
+     (<= 0 (Mul x! y!))
+    )
+    :pattern ((Mul x! y!))
+    :qid user_vstd__arithmetic__mul__lemma_mul_nonnegative_23
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_nonnegative_23
+))))
+
+;; Function-Specs vstd::arithmetic::mul::lemma_mul_unary_negation
+(declare-fun ens%vstd!arithmetic.mul.lemma_mul_unary_negation. (Int Int) Bool)
+(assert
+ (forall ((x! Int) (y! Int)) (!
+   (= (ens%vstd!arithmetic.mul.lemma_mul_unary_negation. x! y!) (let
+     ((tmp%%$ (Sub 0 (Mul x! y!))))
+     (and
+      (= (Mul (Sub 0 x!) y!) tmp%%$)
+      (= tmp%%$ (Mul x! (Sub 0 y!)))
+   )))
+   :pattern ((ens%vstd!arithmetic.mul.lemma_mul_unary_negation. x! y!))
+   :qid internal_ens__vstd!arithmetic.mul.lemma_mul_unary_negation._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.mul.lemma_mul_unary_negation._definition
+)))
+
+;; Broadcast vstd::arithmetic::mul::lemma_mul_unary_negation
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.mul.lemma_mul_unary_negation.)
+  (forall ((x! Int) (y! Int)) (!
+    (let
+     ((tmp%%$ (Sub 0 (Mul x! y!))))
+     (and
+      (= (Mul (Sub 0 x!) y!) tmp%%$)
+      (= tmp%%$ (Mul x! (Sub 0 y!)))
+    ))
+    :pattern ((Mul (Sub 0 x!) y!))
+    :pattern ((Mul x! (Sub 0 y!)))
+    :qid user_vstd__arithmetic__mul__lemma_mul_unary_negation_24
+    :skolemid skolem_user_vstd__arithmetic__mul__lemma_mul_unary_negation_24
+))))
+
+;; Function-Axioms vstd::arithmetic::power::pow
+(declare-const fuel_nat%vstd!arithmetic.power.pow. Fuel)
+(assert
+ (forall ((b! Poly) (e! Poly) (fuel% Fuel)) (!
+   (= (vstd!arithmetic.power.rec%pow.? b! e! fuel%) (vstd!arithmetic.power.rec%pow.? b!
+     e! zero
+   ))
+   :pattern ((vstd!arithmetic.power.rec%pow.? b! e! fuel%))
+   :qid internal_vstd!arithmetic.power.pow._fuel_to_zero_definition
+   :skolemid skolem_internal_vstd!arithmetic.power.pow._fuel_to_zero_definition
+)))
+(assert
+ (forall ((b! Poly) (e! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type b! INT)
+     (has_type e! NAT)
+    )
+    (= (vstd!arithmetic.power.rec%pow.? b! e! (succ fuel%)) (ite
+      (= (%I e!) 0)
+      1
+      (Mul (%I b!) (vstd!arithmetic.power.rec%pow.? b! (I (nClip (Sub (%I e!) 1))) fuel%))
+   )))
+   :pattern ((vstd!arithmetic.power.rec%pow.? b! e! (succ fuel%)))
+   :qid internal_vstd!arithmetic.power.pow._fuel_to_body_definition
+   :skolemid skolem_internal_vstd!arithmetic.power.pow._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power.pow.)
+  (forall ((b! Poly) (e! Poly)) (!
+    (=>
+     (and
+      (has_type b! INT)
+      (has_type e! NAT)
+     )
+     (= (vstd!arithmetic.power.pow.? b! e!) (vstd!arithmetic.power.rec%pow.? b! e! (succ
+        fuel_nat%vstd!arithmetic.power.pow.
+    ))))
+    :pattern ((vstd!arithmetic.power.pow.? b! e!))
+    :qid internal_vstd!arithmetic.power.pow.?_definition
+    :skolemid skolem_internal_vstd!arithmetic.power.pow.?_definition
+))))
+
+;; Function-Specs vstd::arithmetic::power::lemma_pow0
+(declare-fun ens%vstd!arithmetic.power.lemma_pow0. (Int) Bool)
+(assert
+ (forall ((b! Int)) (!
+   (= (ens%vstd!arithmetic.power.lemma_pow0. b!) (= (vstd!arithmetic.power.pow.? (I b!)
+      (I 0)
+     ) 1
+   ))
+   :pattern ((ens%vstd!arithmetic.power.lemma_pow0. b!))
+   :qid internal_ens__vstd!arithmetic.power.lemma_pow0._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power.lemma_pow0._definition
+)))
+
+;; Broadcast vstd::arithmetic::power::lemma_pow0
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power.lemma_pow0.)
+  (forall ((b! Poly)) (!
+    (=>
+     (has_type b! INT)
+     (= (vstd!arithmetic.power.pow.? b! (I 0)) 1)
+    )
+    :pattern ((vstd!arithmetic.power.pow.? b! (I 0)))
+    :qid user_vstd__arithmetic__power__lemma_pow0_25
+    :skolemid skolem_user_vstd__arithmetic__power__lemma_pow0_25
+))))
+
+;; Function-Specs vstd::arithmetic::power::lemma_pow_positive
+(declare-fun req%vstd!arithmetic.power.lemma_pow_positive. (Int Int) Bool)
+(declare-const %%global_location_label%%24 Bool)
+(assert
+ (forall ((b! Int) (e! Int)) (!
+   (= (req%vstd!arithmetic.power.lemma_pow_positive. b! e!) (=>
+     %%global_location_label%%24
+     (> b! 0)
+   ))
+   :pattern ((req%vstd!arithmetic.power.lemma_pow_positive. b! e!))
+   :qid internal_req__vstd!arithmetic.power.lemma_pow_positive._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.power.lemma_pow_positive._definition
+)))
+(declare-fun ens%vstd!arithmetic.power.lemma_pow_positive. (Int Int) Bool)
+(assert
+ (forall ((b! Int) (e! Int)) (!
+   (= (ens%vstd!arithmetic.power.lemma_pow_positive. b! e!) (< 0 (vstd!arithmetic.power.pow.?
+      (I b!) (I e!)
+   )))
+   :pattern ((ens%vstd!arithmetic.power.lemma_pow_positive. b! e!))
+   :qid internal_ens__vstd!arithmetic.power.lemma_pow_positive._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power.lemma_pow_positive._definition
+)))
+
+;; Broadcast vstd::arithmetic::power::lemma_pow_positive
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power.lemma_pow_positive.)
+  (forall ((b! Poly) (e! Poly)) (!
+    (=>
+     (and
+      (has_type b! INT)
+      (has_type e! NAT)
+     )
+     (=>
+      (> (%I b!) 0)
+      (< 0 (vstd!arithmetic.power.pow.? b! e!))
+    ))
+    :pattern ((vstd!arithmetic.power.pow.? b! e!))
+    :qid user_vstd__arithmetic__power__lemma_pow_positive_26
+    :skolemid skolem_user_vstd__arithmetic__power__lemma_pow_positive_26
+))))
+
+;; Function-Specs vstd::arithmetic::power::lemma_pow_multiplies
+(declare-fun ens%vstd!arithmetic.power.lemma_pow_multiplies. (Int Int Int) Bool)
+(assert
+ (forall ((a! Int) (b! Int) (c! Int)) (!
+   (= (ens%vstd!arithmetic.power.lemma_pow_multiplies. a! b! c!) (and
+     (<= 0 (nClip (Mul b! c!)))
+     (= (vstd!arithmetic.power.pow.? (I (vstd!arithmetic.power.pow.? (I a!) (I b!))) (I c!))
+      (vstd!arithmetic.power.pow.? (I a!) (I (nClip (Mul b! c!))))
+   )))
+   :pattern ((ens%vstd!arithmetic.power.lemma_pow_multiplies. a! b! c!))
+   :qid internal_ens__vstd!arithmetic.power.lemma_pow_multiplies._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power.lemma_pow_multiplies._definition
+)))
+
+;; Broadcast vstd::arithmetic::power::lemma_pow_multiplies
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power.lemma_pow_multiplies.)
+  (forall ((a! Poly) (b! Poly) (c! Poly)) (!
+    (=>
+     (and
+      (has_type a! INT)
+      (has_type b! NAT)
+      (has_type c! NAT)
+     )
+     (and
+      (<= 0 (nClip (Mul (%I b!) (%I c!))))
+      (= (vstd!arithmetic.power.pow.? (I (vstd!arithmetic.power.pow.? a! b!)) c!) (vstd!arithmetic.power.pow.?
+        a! (I (nClip (Mul (%I b!) (%I c!))))
+    ))))
+    :pattern ((vstd!arithmetic.power.pow.? (I (vstd!arithmetic.power.pow.? a! b!)) c!))
+    :qid user_vstd__arithmetic__power__lemma_pow_multiplies_27
+    :skolemid skolem_user_vstd__arithmetic__power__lemma_pow_multiplies_27
+))))
+
+;; Function-Specs vstd::arithmetic::power::lemma_pow_mod_noop
+(declare-fun req%vstd!arithmetic.power.lemma_pow_mod_noop. (Int Int Int) Bool)
+(declare-const %%global_location_label%%25 Bool)
+(assert
+ (forall ((b! Int) (e! Int) (m! Int)) (!
+   (= (req%vstd!arithmetic.power.lemma_pow_mod_noop. b! e! m!) (=>
+     %%global_location_label%%25
+     (> m! 0)
+   ))
+   :pattern ((req%vstd!arithmetic.power.lemma_pow_mod_noop. b! e! m!))
+   :qid internal_req__vstd!arithmetic.power.lemma_pow_mod_noop._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.power.lemma_pow_mod_noop._definition
+)))
+(declare-fun ens%vstd!arithmetic.power.lemma_pow_mod_noop. (Int Int Int) Bool)
+(assert
+ (forall ((b! Int) (e! Int) (m! Int)) (!
+   (= (ens%vstd!arithmetic.power.lemma_pow_mod_noop. b! e! m!) (= (EucMod (vstd!arithmetic.power.pow.?
+       (I (EucMod b! m!)) (I e!)
+      ) m!
+     ) (EucMod (vstd!arithmetic.power.pow.? (I b!) (I e!)) m!)
+   ))
+   :pattern ((ens%vstd!arithmetic.power.lemma_pow_mod_noop. b! e! m!))
+   :qid internal_ens__vstd!arithmetic.power.lemma_pow_mod_noop._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power.lemma_pow_mod_noop._definition
+)))
+
+;; Broadcast vstd::arithmetic::power::lemma_pow_mod_noop
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power.lemma_pow_mod_noop.)
+  (forall ((b! Int) (e! Poly) (m! Int)) (!
+    (=>
+     (has_type e! NAT)
+     (=>
+      (> m! 0)
+      (= (EucMod (vstd!arithmetic.power.pow.? (I (EucMod b! m!)) e!) m!) (EucMod (vstd!arithmetic.power.pow.?
+         (I b!) e!
+        ) m!
+    ))))
+    :pattern ((vstd!arithmetic.power.pow.? (I (EucMod b! m!)) e!))
+    :qid user_vstd__arithmetic__power__lemma_pow_mod_noop_28
+    :skolemid skolem_user_vstd__arithmetic__power__lemma_pow_mod_noop_28
+))))
+
+;; Function-Axioms vstd::arithmetic::power2::pow2
+(assert
+ (forall ((e! Poly)) (!
+   (=>
+    (has_type e! NAT)
+    (<= 0 (vstd!arithmetic.power2.pow2.? e!))
+   )
+   :pattern ((vstd!arithmetic.power2.pow2.? e!))
+   :qid internal_vstd!arithmetic.power2.pow2.?_pre_post_definition
+   :skolemid skolem_internal_vstd!arithmetic.power2.pow2.?_pre_post_definition
+)))
+
+;; Function-Specs vstd::arithmetic::power2::lemma_pow2_pos
+(declare-fun ens%vstd!arithmetic.power2.lemma_pow2_pos. (Int) Bool)
+(assert
+ (forall ((e! Int)) (!
+   (= (ens%vstd!arithmetic.power2.lemma_pow2_pos. e!) (> (vstd!arithmetic.power2.pow2.?
+      (I e!)
+     ) 0
+   ))
+   :pattern ((ens%vstd!arithmetic.power2.lemma_pow2_pos. e!))
+   :qid internal_ens__vstd!arithmetic.power2.lemma_pow2_pos._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power2.lemma_pow2_pos._definition
+)))
+
+;; Broadcast vstd::arithmetic::power2::lemma_pow2_pos
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power2.lemma_pow2_pos.)
+  (forall ((e! Poly)) (!
+    (=>
+     (has_type e! NAT)
+     (> (vstd!arithmetic.power2.pow2.? e!) 0)
+    )
+    :pattern ((vstd!arithmetic.power2.pow2.? e!))
+    :qid user_vstd__arithmetic__power2__lemma_pow2_pos_29
+    :skolemid skolem_user_vstd__arithmetic__power2__lemma_pow2_pos_29
+))))
+
+;; Function-Specs vstd::arithmetic::power2::lemma_pow2_adds
+(declare-fun ens%vstd!arithmetic.power2.lemma_pow2_adds. (Int Int) Bool)
+(assert
+ (forall ((e1! Int) (e2! Int)) (!
+   (= (ens%vstd!arithmetic.power2.lemma_pow2_adds. e1! e2!) (= (vstd!arithmetic.power2.pow2.?
+      (I (nClip (Add e1! e2!)))
+     ) (nClip (Mul (vstd!arithmetic.power2.pow2.? (I e1!)) (vstd!arithmetic.power2.pow2.?
+        (I e2!)
+   )))))
+   :pattern ((ens%vstd!arithmetic.power2.lemma_pow2_adds. e1! e2!))
+   :qid internal_ens__vstd!arithmetic.power2.lemma_pow2_adds._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power2.lemma_pow2_adds._definition
+)))
+
+;; Broadcast vstd::arithmetic::power2::lemma_pow2_adds
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power2.lemma_pow2_adds.)
+  (forall ((e1! Int) (e2! Int)) (!
+    (=>
+     (and
+      (<= 0 e1!)
+      (<= 0 e2!)
+     )
+     (= (vstd!arithmetic.power2.pow2.? (I (nClip (Add e1! e2!)))) (nClip (Mul (vstd!arithmetic.power2.pow2.?
+         (I e1!)
+        ) (vstd!arithmetic.power2.pow2.? (I e2!))
+    ))))
+    :pattern ((vstd!arithmetic.power2.pow2.? (I (nClip (Add e1! e2!)))))
+    :qid user_vstd__arithmetic__power2__lemma_pow2_adds_30
+    :skolemid skolem_user_vstd__arithmetic__power2__lemma_pow2_adds_30
+))))
+
+;; Function-Specs vstd::arithmetic::power2::lemma_pow2_strictly_increases
+(declare-fun req%vstd!arithmetic.power2.lemma_pow2_strictly_increases. (Int Int) Bool)
+(declare-const %%global_location_label%%26 Bool)
+(assert
+ (forall ((e1! Int) (e2! Int)) (!
+   (= (req%vstd!arithmetic.power2.lemma_pow2_strictly_increases. e1! e2!) (=>
+     %%global_location_label%%26
+     (< e1! e2!)
+   ))
+   :pattern ((req%vstd!arithmetic.power2.lemma_pow2_strictly_increases. e1! e2!))
+   :qid internal_req__vstd!arithmetic.power2.lemma_pow2_strictly_increases._definition
+   :skolemid skolem_internal_req__vstd!arithmetic.power2.lemma_pow2_strictly_increases._definition
+)))
+(declare-fun ens%vstd!arithmetic.power2.lemma_pow2_strictly_increases. (Int Int) Bool)
+(assert
+ (forall ((e1! Int) (e2! Int)) (!
+   (= (ens%vstd!arithmetic.power2.lemma_pow2_strictly_increases. e1! e2!) (< (vstd!arithmetic.power2.pow2.?
+      (I e1!)
+     ) (vstd!arithmetic.power2.pow2.? (I e2!))
+   ))
+   :pattern ((ens%vstd!arithmetic.power2.lemma_pow2_strictly_increases. e1! e2!))
+   :qid internal_ens__vstd!arithmetic.power2.lemma_pow2_strictly_increases._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power2.lemma_pow2_strictly_increases._definition
+)))
+
+;; Broadcast vstd::arithmetic::power2::lemma_pow2_strictly_increases
+(assert
+ (=>
+  (fuel_bool fuel%vstd!arithmetic.power2.lemma_pow2_strictly_increases.)
+  (forall ((e1! Poly) (e2! Poly)) (!
+    (=>
+     (and
+      (has_type e1! NAT)
+      (has_type e2! NAT)
+     )
+     (=>
+      (< (%I e1!) (%I e2!))
+      (< (vstd!arithmetic.power2.pow2.? e1!) (vstd!arithmetic.power2.pow2.? e2!))
+    ))
+    :pattern ((vstd!arithmetic.power2.pow2.? e1!) (vstd!arithmetic.power2.pow2.? e2!))
+    :qid user_vstd__arithmetic__power2__lemma_pow2_strictly_increases_31
+    :skolemid skolem_user_vstd__arithmetic__power2__lemma_pow2_strictly_increases_31
+))))
+
+;; Function-Specs vstd::arithmetic::power2::lemma2_to64
+(declare-fun ens%vstd!arithmetic.power2.lemma2_to64. (Int) Bool)
+(assert
+ (forall ((no%param Int)) (!
+   (= (ens%vstd!arithmetic.power2.lemma2_to64. no%param) (and
+     (= (vstd!arithmetic.power2.pow2.? (I 0)) 1)
+     (= (vstd!arithmetic.power2.pow2.? (I 1)) 2)
+     (= (vstd!arithmetic.power2.pow2.? (I 2)) 4)
+     (= (vstd!arithmetic.power2.pow2.? (I 3)) 8)
+     (= (vstd!arithmetic.power2.pow2.? (I 4)) 16)
+     (= (vstd!arithmetic.power2.pow2.? (I 5)) 32)
+     (= (vstd!arithmetic.power2.pow2.? (I 6)) 64)
+     (= (vstd!arithmetic.power2.pow2.? (I 7)) 128)
+     (= (vstd!arithmetic.power2.pow2.? (I 8)) 256)
+     (= (vstd!arithmetic.power2.pow2.? (I 9)) 512)
+     (= (vstd!arithmetic.power2.pow2.? (I 10)) 1024)
+     (= (vstd!arithmetic.power2.pow2.? (I 11)) 2048)
+     (= (vstd!arithmetic.power2.pow2.? (I 12)) 4096)
+     (= (vstd!arithmetic.power2.pow2.? (I 13)) 8192)
+     (= (vstd!arithmetic.power2.pow2.? (I 14)) 16384)
+     (= (vstd!arithmetic.power2.pow2.? (I 15)) 32768)
+     (= (vstd!arithmetic.power2.pow2.? (I 16)) 65536)
+     (= (vstd!arithmetic.power2.pow2.? (I 17)) 131072)
+     (= (vstd!arithmetic.power2.pow2.? (I 18)) 262144)
+     (= (vstd!arithmetic.power2.pow2.? (I 19)) 524288)
+     (= (vstd!arithmetic.power2.pow2.? (I 20)) 1048576)
+     (= (vstd!arithmetic.power2.pow2.? (I 21)) 2097152)
+     (= (vstd!arithmetic.power2.pow2.? (I 22)) 4194304)
+     (= (vstd!arithmetic.power2.pow2.? (I 23)) 8388608)
+     (= (vstd!arithmetic.power2.pow2.? (I 24)) 16777216)
+     (= (vstd!arithmetic.power2.pow2.? (I 25)) 33554432)
+     (= (vstd!arithmetic.power2.pow2.? (I 26)) 67108864)
+     (= (vstd!arithmetic.power2.pow2.? (I 27)) 134217728)
+     (= (vstd!arithmetic.power2.pow2.? (I 28)) 268435456)
+     (= (vstd!arithmetic.power2.pow2.? (I 29)) 536870912)
+     (= (vstd!arithmetic.power2.pow2.? (I 30)) 1073741824)
+     (= (vstd!arithmetic.power2.pow2.? (I 31)) 2147483648)
+     (= (vstd!arithmetic.power2.pow2.? (I 32)) 4294967296)
+     (= (vstd!arithmetic.power2.pow2.? (I 64)) 18446744073709551616)
+   ))
+   :pattern ((ens%vstd!arithmetic.power2.lemma2_to64. no%param))
+   :qid internal_ens__vstd!arithmetic.power2.lemma2_to64._definition
+   :skolemid skolem_internal_ens__vstd!arithmetic.power2.lemma2_to64._definition
+)))
+
+;; Function-Axioms curve25519_dalek::specs::field_specs_u64::p
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!specs.field_specs_u64.p.)
+)
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!specs.field_specs_u64.p.)
+  (forall ((no%param Poly)) (!
+    (= (curve25519_dalek!specs.field_specs_u64.p.? no%param) (nClip (Sub (vstd!arithmetic.power2.pow2.?
+        (I 255)
+       ) 19
+    )))
+    :pattern ((curve25519_dalek!specs.field_specs_u64.p.? no%param))
+    :qid internal_curve25519_dalek!specs.field_specs_u64.p.?_definition
+    :skolemid skolem_internal_curve25519_dalek!specs.field_specs_u64.p.?_definition
+))))
+(assert
+ (forall ((no%param Poly)) (!
+   (=>
+    (has_type no%param INT)
+    (<= 0 (curve25519_dalek!specs.field_specs_u64.p.? no%param))
+   )
+   :pattern ((curve25519_dalek!specs.field_specs_u64.p.? no%param))
+   :qid internal_curve25519_dalek!specs.field_specs_u64.p.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!specs.field_specs_u64.p.?_pre_post_definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::spec_gcd
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.)
+)
+(declare-const fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.
+ Fuel
+)
+(assert
+ (forall ((a! Poly) (b! Poly) (fuel% Fuel)) (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.? a! b!
+     fuel%
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.? a! b!
+     zero
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.?
+     a! b! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd._fuel_to_zero_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd._fuel_to_zero_definition
+)))
+(assert
+ (forall ((a! Poly) (b! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type b! NAT)
+    )
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.? a! b!
+      (succ fuel%)
+     ) (ite
+      (= (%I b!) 0)
+      (%I a!)
+      (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.? b! (I (EucMod
+         (%I a!) (%I b!)
+        )
+       ) fuel%
+   ))))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.?
+     a! b! (succ fuel%)
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd._fuel_to_body_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.)
+  (forall ((a! Poly) (b! Poly)) (!
+    (=>
+     (and
+      (has_type a! NAT)
+      (has_type b! NAT)
+     )
+     (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? a! b!) (
+       curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.? a! b! (
+        succ fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.
+    ))))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? a!
+      b!
+    ))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?_definition
+))))
+(assert
+ (forall ((a! Poly) (b! Poly)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type b! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? a! b!))
+   )
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? a!
+     b!
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?_pre_post_definition
+)))
+(assert
+ (forall ((a! Poly) (b! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type b! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.? a!
+      b! fuel%
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_gcd.?
+     a! b! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__spec_gcd.?_pre_post_rec_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__spec_gcd.?_pre_post_rec_definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::spec_extended_gcd
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.)
+)
+(declare-const fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.
+ Fuel
+)
+(assert
+ (forall ((a! Poly) (b! Poly) (fuel% Fuel)) (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+     a! b! fuel%
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+     a! b! zero
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+     a! b! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd._fuel_to_zero_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd._fuel_to_zero_definition
+)))
+(assert
+ (forall ((a! Poly) (b! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type b! NAT)
+    )
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+      a! b! (succ fuel%)
+     ) (ite
+      (= (%I b!) 0)
+      (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult
+       (%I a!) (%I (I 1)) (%I (I 0))
+      )
+      (let
+       ((r$ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+          b! (I (EucMod (%I a!) (%I b!))) fuel%
+       )))
+       (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult
+        (%I (I (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/gcd
+           (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+             r$
+         ))))
+        ) (%I (I (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/y
+           (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+             r$
+         ))))
+        ) (%I (I (Sub (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/x
+            (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+              r$
+            ))
+           ) (Mul (EucDiv (%I a!) (%I b!)) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/y
+             (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+               r$
+   ))))))))))))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+     a! b! (succ fuel%)
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd._fuel_to_body_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.)
+  (forall ((a! Poly) (b! Poly)) (!
+    (=>
+     (and
+      (has_type a! NAT)
+      (has_type b! NAT)
+     )
+     (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?
+       a! b!
+      ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+       a! b! (succ fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.)
+    )))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?
+      a! b!
+    ))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?_definition
+))))
+(assert
+ (forall ((a! Poly) (b! Poly)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type b! NAT)
+    )
+    (has_type (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+      (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.? a!
+       b!
+      )
+     ) TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?
+     a! b!
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?_pre_post_definition
+)))
+(assert
+ (forall ((a! Poly) (b! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type b! NAT)
+    )
+    (has_type (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+      (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+       a! b! fuel%
+      )
+     ) TYPE%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%spec_extended_gcd.?
+     a! b! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__spec_extended_gcd.?_pre_post_rec_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__spec_extended_gcd.?_pre_post_rec_definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::spec_mod_inverse
+(declare-fun req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.
+ (Poly Poly) Bool
+)
+(declare-const %%global_location_label%%27 Bool)
+(declare-const %%global_location_label%%28 Bool)
+(assert
+ (forall ((a! Poly) (m! Poly)) (!
+   (= (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.
+     a! m!
+    ) (and
+     (=>
+      %%global_location_label%%27
+      (> (%I m!) 1)
+     )
+     (=>
+      %%global_location_label%%28
+      (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I (EucMod
+          (%I a!) (%I m!)
+         )
+        ) m!
+       ) 1
+   ))))
+   :pattern ((req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.
+     a! m!
+   ))
+   :qid internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse._definition
+   :skolemid skolem_internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse._definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::spec_mod_inverse
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.)
+)
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.)
+  (forall ((a! Poly) (m! Poly)) (!
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.? a!
+      m!
+     ) (ite
+      (or
+       (<= (%I m!) 1)
+       (not (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I (EucMod
+            (%I a!) (%I m!)
+           )
+          ) m!
+         ) 1
+      )))
+      0
+      (let
+       ((r$ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_extended_gcd.?
+          (I (EucMod (%I a!) (%I m!))) m!
+       )))
+       (nClip (EucMod (Add (EucMod (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult./ExtGcdResult/x
+            (%Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult. (Poly%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.ExtGcdResult.
+              r$
+            ))
+           ) (%I m!)
+          ) (%I m!)
+         ) (%I m!)
+    )))))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?
+      a! m!
+    ))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?_definition
+))))
+(assert
+ (forall ((a! Poly) (m! Poly)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type m! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?
+      a! m!
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?
+     a! m!
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_mod_inverse.?_pre_post_definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::factorial
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.)
+)
+(declare-const fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.
+ Fuel
+)
+(assert
+ (forall ((n! Poly) (fuel% Fuel)) (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.? n! fuel%)
+    (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.? n! zero)
+   )
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.?
+     n! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial._fuel_to_zero_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial._fuel_to_zero_definition
+)))
+(assert
+ (forall ((n! Poly) (fuel% Fuel)) (!
+   (=>
+    (has_type n! NAT)
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.? n! (
+       succ fuel%
+      )
+     ) (ite
+      (= (%I n!) 0)
+      1
+      (nClip (Mul (%I n!) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.?
+         (I (nClip (Sub (%I n!) 1))) fuel%
+   ))))))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.?
+     n! (succ fuel%)
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial._fuel_to_body_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.)
+  (forall ((n! Poly)) (!
+    (=>
+     (has_type n! NAT)
+     (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.? n!) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.?
+       n! (succ fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.)
+    )))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.? n!))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.?_definition
+))))
+(assert
+ (forall ((n! Poly)) (!
+   (=>
+    (has_type n! NAT)
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.? n!))
+   )
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.? n!))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.factorial.?_pre_post_definition
+)))
+(assert
+ (forall ((n! Poly) (fuel% Fuel)) (!
+   (=>
+    (has_type n! NAT)
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.? n!
+      fuel%
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%factorial.?
+     n! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__factorial.?_pre_post_rec_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__factorial.?_pre_post_rec_definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::binomial
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.)
+)
+(declare-const fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.
+ Fuel
+)
+(assert
+ (forall ((n! Poly) (k! Poly) (fuel% Fuel)) (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.? n! k!
+     fuel%
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.? n! k!
+     zero
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.?
+     n! k! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial._fuel_to_zero_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial._fuel_to_zero_definition
+)))
+(assert
+ (forall ((n! Poly) (k! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type n! NAT)
+     (has_type k! NAT)
+    )
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.? n! k!
+      (succ fuel%)
+     ) (ite
+      (> (%I k!) (%I n!))
+      0
+      (ite
+       (or
+        (= (%I k!) 0)
+        (= k! n!)
+       )
+       1
+       (nClip (Add (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.?
+          (I (nClip (Sub (%I n!) 1))) (I (nClip (Sub (%I k!) 1))) fuel%
+         ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.? (I (nClip
+            (Sub (%I n!) 1)
+           )
+          ) k! fuel%
+   )))))))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.?
+     n! k! (succ fuel%)
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial._fuel_to_body_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.)
+  (forall ((n! Poly) (k! Poly)) (!
+    (=>
+     (and
+      (has_type n! NAT)
+      (has_type k! NAT)
+     )
+     (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.? n! k!) (
+       curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.? n! k! (
+        succ fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.
+    ))))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.? n!
+      k!
+    ))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.?_definition
+))))
+(assert
+ (forall ((n! Poly) (k! Poly)) (!
+   (=>
+    (and
+     (has_type n! NAT)
+     (has_type k! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.? n! k!))
+   )
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.? n!
+     k!
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.?_pre_post_definition
+)))
+(assert
+ (forall ((n! Poly) (k! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type n! NAT)
+     (has_type k! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.? n!
+      k! fuel%
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial.?
+     n! k! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__binomial.?_pre_post_rec_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__binomial.?_pre_post_rec_definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::binomial_sum
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.)
+)
+(declare-const fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.
+ Fuel
+)
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly) (fuel% Fuel)) (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.? a!
+     n! max_k! fuel%
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.? a!
+     n! max_k! zero
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.?
+     a! n! max_k! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum._fuel_to_zero_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum._fuel_to_zero_definition
+)))
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+     (has_type max_k! NAT)
+    )
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.? a!
+      n! max_k! (succ fuel%)
+     ) (ite
+      (= (%I max_k!) 0)
+      (nClip (Mul (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.? n!
+         (I 0)
+        ) (nClip (vstd!arithmetic.power.pow.? a! (I 0)))
+      ))
+      (nClip (Add (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.?
+         a! n! (I (nClip (Sub (%I max_k!) 1))) fuel%
+        ) (nClip (Mul (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.?
+           n! max_k!
+          ) (nClip (vstd!arithmetic.power.pow.? a! max_k!))
+   )))))))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.?
+     a! n! max_k! (succ fuel%)
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum._fuel_to_body_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.)
+  (forall ((a! Poly) (n! Poly) (max_k! Poly)) (!
+    (=>
+     (and
+      (has_type a! NAT)
+      (has_type n! NAT)
+      (has_type max_k! NAT)
+     )
+     (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.? a! n!
+       max_k!
+      ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.? a!
+       n! max_k! (succ fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.)
+    )))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.?
+      a! n! max_k!
+    ))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.?_definition
+))))
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+     (has_type max_k! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.? a!
+      n! max_k!
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.?
+     a! n! max_k!
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial_sum.?_pre_post_definition
+)))
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+     (has_type max_k! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.?
+      a! n! max_k! fuel%
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%binomial_sum.?
+     a! n! max_k! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__binomial_sum.?_pre_post_rec_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__binomial_sum.?_pre_post_rec_definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::shifted_binomial_sum
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.)
+)
+(declare-const fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.
+ Fuel
+)
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly) (fuel% Fuel)) (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+     a! n! max_k! fuel%
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+     a! n! max_k! zero
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+     a! n! max_k! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum._fuel_to_zero_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum._fuel_to_zero_definition
+)))
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+     (has_type max_k! NAT)
+    )
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+      a! n! max_k! (succ fuel%)
+     ) (ite
+      (= (%I max_k!) 0)
+      (nClip (Mul (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.? n!
+         (I 0)
+        ) (nClip (vstd!arithmetic.power.pow.? a! (I 1)))
+      ))
+      (nClip (Add (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+         a! n! (I (nClip (Sub (%I max_k!) 1))) fuel%
+        ) (nClip (Mul (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.binomial.?
+           n! max_k!
+          ) (nClip (vstd!arithmetic.power.pow.? a! (I (nClip (Add (%I max_k!) 1)))))
+   )))))))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+     a! n! max_k! (succ fuel%)
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum._fuel_to_body_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.)
+  (forall ((a! Poly) (n! Poly) (max_k! Poly)) (!
+    (=>
+     (and
+      (has_type a! NAT)
+      (has_type n! NAT)
+      (has_type max_k! NAT)
+     )
+     (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?
+       a! n! max_k!
+      ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+       a! n! max_k! (succ fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.)
+    )))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?
+      a! n! max_k!
+    ))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?_definition
+))))
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+     (has_type max_k! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?
+      a! n! max_k!
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?
+     a! n! max_k!
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.shifted_binomial_sum.?_pre_post_definition
+)))
+(assert
+ (forall ((a! Poly) (n! Poly) (max_k! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+     (has_type max_k! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+      a! n! max_k! fuel%
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%shifted_binomial_sum.?
+     a! n! max_k! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__shifted_binomial_sum.?_pre_post_rec_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__shifted_binomial_sum.?_pre_post_rec_definition
+)))
+
+;; Function-Axioms curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::product_of_multiples
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.)
+)
+(declare-const fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.
+ Fuel
+)
+(assert
+ (forall ((a! Poly) (n! Poly) (fuel% Fuel)) (!
+   (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+     a! n! fuel%
+    ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+     a! n! zero
+   ))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+     a! n! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples._fuel_to_zero_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples._fuel_to_zero_definition
+)))
+(assert
+ (forall ((a! Poly) (n! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+    )
+    (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+      a! n! (succ fuel%)
+     ) (ite
+      (= (%I n!) 0)
+      1
+      (nClip (Mul (nClip (Mul (%I n!) (%I a!))) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+         a! (I (nClip (Sub (%I n!) 1))) fuel%
+   ))))))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+     a! n! (succ fuel%)
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples._fuel_to_body_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples._fuel_to_body_definition
+)))
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.)
+  (forall ((a! Poly) (n! Poly)) (!
+    (=>
+     (and
+      (has_type a! NAT)
+      (has_type n! NAT)
+     )
+     (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?
+       a! n!
+      ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+       a! n! (succ fuel_nat%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.)
+    )))
+    :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?
+      a! n!
+    ))
+    :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?_definition
+    :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?_definition
+))))
+(assert
+ (forall ((a! Poly) (n! Poly)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?
+      a! n!
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?
+     a! n!
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?_pre_post_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.product_of_multiples.?_pre_post_definition
+)))
+(assert
+ (forall ((a! Poly) (n! Poly) (fuel% Fuel)) (!
+   (=>
+    (and
+     (has_type a! NAT)
+     (has_type n! NAT)
+    )
+    (<= 0 (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+      a! n! fuel%
+   )))
+   :pattern ((curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec%product_of_multiples.?
+     a! n! fuel%
+   ))
+   :qid internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__product_of_multiples.?_pre_post_rec_definition
+   :skolemid skolem_internal_curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.rec__product_of_multiples.?_pre_post_rec_definition
+)))
+
+;; Function-Axioms curve25519_dalek::specs::primality_specs::is_prime
+(assert
+ (fuel_bool_default fuel%curve25519_dalek!specs.primality_specs.is_prime.)
+)
+(assert
+ (=>
+  (fuel_bool fuel%curve25519_dalek!specs.primality_specs.is_prime.)
+  (forall ((n! Poly)) (!
+    (= (curve25519_dalek!specs.primality_specs.is_prime.? n!) (and
+      (> (%I n!) 1)
+      (forall ((d$ Int)) (!
+        (=>
+         (<= 0 d$)
+         (=>
+          (let
+           ((tmp%%$ d$))
+           (and
+            (< 1 tmp%%$)
+            (< tmp%%$ (%I n!))
+          ))
+          (not (= (EucMod (%I n!) d$) 0))
+        ))
+        :pattern ((EucMod (%I n!) d$))
+        :qid user_curve25519_dalek__specs__primality_specs__is_prime_32
+        :skolemid skolem_user_curve25519_dalek__specs__primality_specs__is_prime_32
+    ))))
+    :pattern ((curve25519_dalek!specs.primality_specs.is_prime.? n!))
+    :qid internal_curve25519_dalek!specs.primality_specs.is_prime.?_definition
+    :skolemid skolem_internal_curve25519_dalek!specs.primality_specs.is_prime.?_definition
+))))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::pow_lemmas::lemma_pow2_even
+(declare-fun req%curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even.
+ (Int) Bool
+)
+(declare-const %%global_location_label%%29 Bool)
+(assert
+ (forall ((n! Int)) (!
+   (= (req%curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even. n!) (=>
+     %%global_location_label%%29
+     (>= n! 1)
+   ))
+   :pattern ((req%curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even. n!))
+   :qid internal_req__curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even._definition
+   :skolemid skolem_internal_req__curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even._definition
+)))
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even.
+ (Int) Bool
+)
+(assert
+ (forall ((n! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even. n!) (= (EucMod
+      (vstd!arithmetic.power2.pow2.? (I n!)) 2
+     ) 0
+   ))
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even. n!))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.pow_lemmas.lemma_pow2_even._definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_gcd_positive
+(declare-fun req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+ (Int Int) Bool
+)
+(declare-const %%global_location_label%%30 Bool)
+(assert
+ (forall ((a! Int) (b! Int)) (!
+   (= (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+     a! b!
+    ) (=>
+     %%global_location_label%%30
+     (or
+      (> a! 0)
+      (> b! 0)
+   )))
+   :pattern ((req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+     a! b!
+   ))
+   :qid internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive._definition
+   :skolemid skolem_internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive._definition
+)))
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+ (Int Int) Bool
+)
+(assert
+ (forall ((a! Int) (b! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+     a! b!
+    ) (> (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I a!)
+      (I b!)
+     ) 0
+   ))
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+     a! b!
+   ))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive._definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_divides_linear_combo
+(declare-fun req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo.
+ (Int Int Int Int) Bool
+)
+(declare-const %%global_location_label%%31 Bool)
+(declare-const %%global_location_label%%32 Bool)
+(declare-const %%global_location_label%%33 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (k! Int) (d! Int)) (!
+   (= (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo.
+     x! y! k! d!
+    ) (and
+     (=>
+      %%global_location_label%%31
+      (> d! 0)
+     )
+     (=>
+      %%global_location_label%%32
+      (= (EucMod x! d!) 0)
+     )
+     (=>
+      %%global_location_label%%33
+      (= (EucMod y! d!) 0)
+   )))
+   :pattern ((req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo.
+     x! y! k! d!
+   ))
+   :qid internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo._definition
+   :skolemid skolem_internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo._definition
+)))
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo.
+ (Int Int Int Int) Bool
+)
+(assert
+ (forall ((x! Int) (y! Int) (k! Int) (d! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo.
+     x! y! k! d!
+    ) (= (EucMod (nClip (Add x! (nClip (Mul k! y!)))) d!) 0)
+   )
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo.
+     x! y! k! d!
+   ))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo._definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_gcd_divides_both
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_divides_both.
+ (Int Int) Bool
+)
+(assert
+ (forall ((a! Int) (b! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_divides_both.
+     a! b!
+    ) (and
+     (or
+      (= (EucMod a! (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?
+         (I a!) (I b!)
+        )
+       ) 0
+      )
+      (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I a!) (I
+         b!
+        )
+       ) 0
+     ))
+     (or
+      (= (EucMod b! (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?
+         (I a!) (I b!)
+        )
+       ) 0
+      )
+      (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I a!) (I
+         b!
+        )
+       ) 0
+   ))))
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_divides_both.
+     a! b!
+   ))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_divides_both._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_divides_both._definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_divides_linear_combo_sub
+(declare-fun req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub.
+ (Int Int Int Int) Bool
+)
+(declare-const %%global_location_label%%34 Bool)
+(declare-const %%global_location_label%%35 Bool)
+(declare-const %%global_location_label%%36 Bool)
+(declare-const %%global_location_label%%37 Bool)
+(assert
+ (forall ((x! Int) (y! Int) (k! Int) (d! Int)) (!
+   (= (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub.
+     x! y! k! d!
+    ) (and
+     (=>
+      %%global_location_label%%34
+      (> d! 0)
+     )
+     (=>
+      %%global_location_label%%35
+      (= (EucMod x! d!) 0)
+     )
+     (=>
+      %%global_location_label%%36
+      (= (EucMod y! d!) 0)
+     )
+     (=>
+      %%global_location_label%%37
+      (>= x! (nClip (Mul k! y!)))
+   )))
+   :pattern ((req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub.
+     x! y! k! d!
+   ))
+   :qid internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub._definition
+   :skolemid skolem_internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub._definition
+)))
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub.
+ (Int Int Int Int) Bool
+)
+(assert
+ (forall ((x! Int) (y! Int) (k! Int) (d! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub.
+     x! y! k! d!
+    ) (= (EucMod (nClip (Sub x! (nClip (Mul k! y!)))) d!) 0)
+   )
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub.
+     x! y! k! d!
+   ))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_divides_linear_combo_sub._definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_common_divisor_divides_gcd
+(declare-fun req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+ (Int Int Int) Bool
+)
+(declare-const %%global_location_label%%38 Bool)
+(declare-const %%global_location_label%%39 Bool)
+(declare-const %%global_location_label%%40 Bool)
+(assert
+ (forall ((a! Int) (b! Int) (d! Int)) (!
+   (= (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+     a! b! d!
+    ) (and
+     (=>
+      %%global_location_label%%38
+      (> d! 0)
+     )
+     (=>
+      %%global_location_label%%39
+      (= (EucMod a! d!) 0)
+     )
+     (=>
+      %%global_location_label%%40
+      (= (EucMod b! d!) 0)
+   )))
+   :pattern ((req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+     a! b! d!
+   ))
+   :qid internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd._definition
+   :skolemid skolem_internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd._definition
+)))
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+ (Int Int Int) Bool
+)
+(assert
+ (forall ((a! Int) (b! Int) (d! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+     a! b! d!
+    ) (= (EucMod (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.?
+       (I a!) (I b!)
+      ) d!
+     ) 0
+   ))
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+     a! b! d!
+   ))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd._definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_mod_is_zero_when_divisible
+(declare-fun req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+ (Int Int) Bool
+)
+(declare-const %%global_location_label%%41 Bool)
+(declare-const %%global_location_label%%42 Bool)
+(assert
+ (forall ((n! Int) (d! Int)) (!
+   (= (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+     n! d!
+    ) (and
+     (=>
+      %%global_location_label%%41
+      (> d! 0)
+     )
+     (=>
+      %%global_location_label%%42
+      (= (EucMod n! d!) 0)
+   )))
+   :pattern ((req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+     n! d!
+   ))
+   :qid internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible._definition
+   :skolemid skolem_internal_req__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible._definition
+)))
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+ (Int Int) Bool
+)
+(assert
+ (forall ((n! Int) (d! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+     n! d!
+    ) (or
+     (<= d! n!)
+     (= n! 0)
+   ))
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+     n! d!
+   ))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible._definition
+)))
+
+;; Function-Specs curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_gcd_symmetric
+(declare-fun ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_symmetric.
+ (Int Int) Bool
+)
+(assert
+ (forall ((a! Int) (b! Int)) (!
+   (= (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_symmetric.
+     a! b!
+    ) (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I a!)
+      (I b!)
+     ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I b!) (I
+       a!
+   ))))
+   :pattern ((ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_symmetric.
+     a! b!
+   ))
+   :qid internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_symmetric._definition
+   :skolemid skolem_internal_ens__curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_symmetric._definition
+)))
+
+;; Function-Def curve25519_dalek::lemmas::common_lemmas::number_theory_lemmas::lemma_gcd_symmetric
+;; curve25519-dalek/src/lemmas/common_lemmas/number_theory_lemmas.rs:219:1: 219:49 (#0)
+(get-info :all-statistics)
+(push)
+ (declare-const a! Int)
+ (declare-const b! Int)
+ (declare-const g_ab@ Int)
+ (declare-const g_ba@ Int)
+ (assert
+  fuel_defaults
+ )
+ (assert
+  (<= 0 a!)
+ )
+ (assert
+  (<= 0 b!)
+ )
+ (declare-const %%switch_label%%0 Bool)
+ ;; precondition not satisfied
+ (declare-const %%location_label%%0 Bool)
+ ;; precondition not satisfied
+ (declare-const %%location_label%%1 Bool)
+ ;; assertion failed
+ (declare-const %%location_label%%2 Bool)
+ ;; assertion failed
+ (declare-const %%location_label%%3 Bool)
+ ;; assertion failed
+ (declare-const %%location_label%%4 Bool)
+ ;; precondition not satisfied
+ (declare-const %%location_label%%5 Bool)
+ ;; assertion failed
+ (declare-const %%location_label%%6 Bool)
+ ;; precondition not satisfied
+ (declare-const %%location_label%%7 Bool)
+ ;; assertion failed
+ (declare-const %%location_label%%8 Bool)
+ ;; precondition not satisfied
+ (declare-const %%location_label%%9 Bool)
+ ;; assertion failed
+ (declare-const %%location_label%%10 Bool)
+ ;; precondition not satisfied
+ (declare-const %%location_label%%11 Bool)
+ ;; assertion failed
+ (declare-const %%location_label%%12 Bool)
+ ;; postcondition not satisfied
+ (declare-const %%location_label%%13 Bool)
+ (assert
+  (not (=>
+    (= g_ab@ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I a!)
+      (I b!)
+    ))
+    (=>
+     (= g_ba@ (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I b!)
+       (I a!)
+     ))
+     (or
+      (and
+       (=>
+        (and
+         (= a! 0)
+         (= b! 0)
+        )
+        %%switch_label%%0
+       )
+       (=>
+        (not (and
+          (= a! 0)
+          (= b! 0)
+        ))
+        (and
+         (and
+          (=>
+           %%location_label%%0
+           (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+            a! b!
+          ))
+          (=>
+           (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+            a! b!
+           )
+           (and
+            (=>
+             %%location_label%%1
+             (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+              b! a!
+            ))
+            (=>
+             (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_positive.
+              b! a!
+             )
+             (=>
+              %%location_label%%2
+              (and
+               (> g_ab@ 0)
+               (> g_ba@ 0)
+         ))))))
+         (=>
+          (and
+           (> g_ab@ 0)
+           (> g_ba@ 0)
+          )
+          (and
+           (=>
+            (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_divides_both.
+             a! b!
+            )
+            (=>
+             %%location_label%%3
+             (and
+              (= (EucMod a! g_ab@) 0)
+              (= (EucMod b! g_ab@) 0)
+           )))
+           (=>
+            (and
+             (= (EucMod a! g_ab@) 0)
+             (= (EucMod b! g_ab@) 0)
+            )
+            (and
+             (=>
+              (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_gcd_divides_both.
+               b! a!
+              )
+              (=>
+               %%location_label%%4
+               (and
+                (= (EucMod b! g_ba@) 0)
+                (= (EucMod a! g_ba@) 0)
+             )))
+             (=>
+              (and
+               (= (EucMod b! g_ba@) 0)
+               (= (EucMod a! g_ba@) 0)
+              )
+              (and
+               (and
+                (=>
+                 %%location_label%%5
+                 (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+                  b! a! g_ab@
+                ))
+                (=>
+                 (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+                  b! a! g_ab@
+                 )
+                 (=>
+                  %%location_label%%6
+                  (= (EucMod g_ba@ g_ab@) 0)
+               )))
+               (=>
+                (= (EucMod g_ba@ g_ab@) 0)
+                (and
+                 (and
+                  (=>
+                   %%location_label%%7
+                   (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+                    a! b! g_ba@
+                  ))
+                  (=>
+                   (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_common_divisor_divides_gcd.
+                    a! b! g_ba@
+                   )
+                   (=>
+                    %%location_label%%8
+                    (= (EucMod g_ab@ g_ba@) 0)
+                 )))
+                 (=>
+                  (= (EucMod g_ab@ g_ba@) 0)
+                  (and
+                   (and
+                    (=>
+                     %%location_label%%9
+                     (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+                      g_ba@ g_ab@
+                    ))
+                    (=>
+                     (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+                      g_ba@ g_ab@
+                     )
+                     (=>
+                      %%location_label%%10
+                      (<= g_ab@ g_ba@)
+                   )))
+                   (=>
+                    (<= g_ab@ g_ba@)
+                    (and
+                     (and
+                      (=>
+                       %%location_label%%11
+                       (req%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+                        g_ab@ g_ba@
+                      ))
+                      (=>
+                       (ens%curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.lemma_mod_is_zero_when_divisible.
+                        g_ab@ g_ba@
+                       )
+                       (=>
+                        %%location_label%%12
+                        (<= g_ba@ g_ab@)
+                     )))
+                     (=>
+                      (<= g_ba@ g_ab@)
+                      %%switch_label%%0
+      ))))))))))))))))
+      (and
+       (not %%switch_label%%0)
+       (=>
+        %%location_label%%13
+        (= (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I a!) (I
+           b!
+          )
+         ) (curve25519_dalek!lemmas.common_lemmas.number_theory_lemmas.spec_gcd.? (I b!) (I
+           a!
+ ))))))))))
+ (get-info :version)
+ (set-option :rlimit 30000000)
+ (check-sat)
+ (set-option :rlimit 0)
+(pop)
