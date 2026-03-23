@@ -6,7 +6,8 @@
 #   - JSON-to-GITHUB_OUTPUT bridging (workflow_utils.py)
 #   - GITHUB_STEP_SUMMARY markdown (certify_summary.py)
 #
-# The certify-external-extract.yml is preserved in git as a backup.
+# Legacy workflows (certify-external.yml, certify-external-extract.yml)
+# are gitignored local backups.
 
 name: Certify External Project (v2)
 

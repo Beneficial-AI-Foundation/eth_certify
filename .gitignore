@@ -25,4 +25,6 @@ kb/
 
 # Legacy workflows (kept locally as debug backups)
 .github/workflows/certify-external.yml
+.github/workflows/certify-external-extract.yml
 .github/workflows/verify.yml
+.github/workflows/verify-extract.yml
