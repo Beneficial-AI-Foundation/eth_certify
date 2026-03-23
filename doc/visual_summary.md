@@ -307,14 +307,13 @@ uv run python -m certify_cli verify-hash <content_hash> --network sepolia
                                          │
                                          ▼
   ┌───────────────────────────────────────────────────────────────────────────────────┐
-  │ STEP 1: probe-verus/action@v3 + spec extraction + SMT logging                     │
+  │ STEP 1: probe-verus/action-extract@v5 (unified pipeline + SMT logging)             │
   │ ────────────────────────────────────────────────────────────                       │
   │ • Clone target repository                                                         │
   │ • Install Verus toolchain (version from Cargo.toml)                               │
-  │ • Run: probe-verus atomize → atoms.json (function inventory)                      │
-  │ • Run: probe-verus verify  → results.json + per-function .smt2 files              │
+  │ • Run: probe-verus extract (atomize + specify + verify in one invocation)         │
+  │   → results.json + specs.json + per-function .smt2 files                          │
   │   (with --log smt --log-dir ./verus-smt-logs -V spinoff-all)                      │
-  │ • Run: probe-verus specify → specs.json (specification manifest)                  │
   │                                                                                   │
   │ Outputs: results.json, specs.json, smt-log-dir, verified_count, total_functions   │
   └───────────────────────────────────────────────────────────────────────────────────┘

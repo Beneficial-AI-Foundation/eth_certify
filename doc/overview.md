@@ -41,37 +41,37 @@ We've created a complete pipeline that:
 
 ## GitHub Actions Created
 
-### 1. Verus Verify Action (`baif/probe-verus/action`)
+### 1. Verus Extract Action (`baif/probe-verus/action-extract`)
 
 **Location:** https://github.com/Beneficial-AI-Foundation/probe-verus
 
-A reusable composite GitHub Action that runs Verus formal verification on Rust projects.
+A reusable composite GitHub Action that runs the unified probe-verus extract pipeline (atomize + specify + verify) on Rust/Verus projects.
 
 **Features:**
 - Extracts Verus and Rust versions from `Cargo.toml` metadata
 - Installs all required tooling (Rust, Verus, verus-analyzer, SCIP, probe-verus)
 - Caches dependencies for faster subsequent runs
-- Runs `probe-verus atomize` to extract verifiable functions
-- Runs `probe-verus verify` (unified pipeline) to perform formal verification
+- Runs `probe-verus extract` — unified pipeline that atomizes functions, extracts specifications, and runs Verus verification in a single invocation
 - Handles Schema 2.0 enveloped and bare results.json formats
+- Supports taxonomy classification via `--taxonomy-config`
 
 **Outputs:**
-- `results-file`: Path to verification results JSON
-- `atoms-file`: Path to atoms JSON
+- `extract-summary-file`: Path to extract summary JSON (contains paths to results and specs)
+- `extract-file`: Path to the unified extract JSON
 - `verified-count`: Number of successfully verified functions
 - `total-functions`: Total number of verifiable functions
 - `verus-version`: Verus version used for verification
 - `rust-version`: Rust toolchain version used
-- `smt-log-dir`: Path to SMT log directory (when `verus-args` includes `--log smt`)
 
 **Usage:**
 ```yaml
-- uses: Beneficial-AI-Foundation/probe-verus/action@v3
+- uses: Beneficial-AI-Foundation/probe-verus/action-extract@v5
   with:
     project-path: '.'
     package: 'my-crate'
     output-dir: './output'
     verus-args: '--log smt --log-dir ./verus-smt-logs -V spinoff-all'
+    taxonomy-config: 'spec-taxonomy.toml'
 ```
 
 The `verus-args` input passes extra arguments to Verus. With `--log smt -V spinoff-all`,
@@ -281,7 +281,7 @@ for each certification:
   - `z3_proofs/*.proof` - Z3 proof terms (legacy proof format)
 - `proofs/latest/` - Most recent proof bundle
 
-The specification manifest (produced by `probe-verus specify`) contains the
+The specification manifest (produced by `probe-verus extract`) contains the
 pre/postconditions for each verified function, making the "theorem statements"
 inspectable without reading source code.
 
@@ -312,13 +312,13 @@ This enables:
 ╭───────────────────────────────────────────────────────────────────────────╮
 │  🔍 STEP 1: VERIFICATION + SPEC EXTRACTION + SMT LOGGING                  │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │  probe-verus/action@v3  (with verus-args: --log smt -V spinoff-all)│  │
+│  │  probe-verus/action-extract@v5  (verus-args: --log smt -V spinoff) │  │
 │  │  ├── Install Verus toolchain                                        │  │
-│  │  ├── Run probe-verus atomize → atoms.json                           │  │
-│  │  └── Run probe-verus verify  → results.json + per-function .smt2    │  │
-│  │                                                                     │  │
-│  │  probe-verus specify (post-action step)                             │  │
-│  │  └── Extract specs from source + atoms.json → specs.json            │  │
+│  │  ├── Run probe-verus extract (unified: atomize + specify + verify)  │  │
+│  │  │   ├── atoms.json (function inventory)                            │  │
+│  │  │   ├── results.json (verification results + per-function .smt2)   │  │
+│  │  │   └── specs.json (specification manifest)                        │  │
+│  │  └── Extract summary → paths to results, specs, extract output      │  │
 │  └─────────────────────────────────────────────────────────────────────┘  │
 │                                                                           │
 │  📤 Outputs: results.json, specs.json, smt-log-dir, counts              │
@@ -423,8 +423,10 @@ eth_certify/
 ├── src/
 │   └── Certify.sol         # Solidity contract
 └── .github/workflows/
-    ├── certify-external.yml           # Certify external projects (with spec extraction)
-    ├── verify.yml                     # Verify certifications (with Merkle check)
+    ├── certify-v2.yml                 # Certify external projects (Python-backed, extract@v5)
+    ├── verify-v2.yml                  # Verify certifications (Python-backed, extract@v5)
+    ├── certify-external-extract.yml   # Certify (inline bash, extract@v5, backup)
+    ├── verify-extract.yml             # Verify (inline bash, extract@v5, backup)
     ├── ci.yml                         # Linting & tests
     └── verify-certify-badge.yml.example
 ```

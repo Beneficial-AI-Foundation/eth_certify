@@ -6,7 +6,7 @@
 #   - probe-verus extract output parsing (resolve_extract.py)
 #   - GITHUB_STEP_SUMMARY markdown (verify_summary.py)
 #
-# The original verify-extract.yml is preserved as a backup.
+# The verify-extract.yml is preserved in git as a backup.
 #
 # Performs multiple levels of verification:
 #   1. STORED RESULTS: Registry lookup, hash checks, Merkle structure, proof bundle

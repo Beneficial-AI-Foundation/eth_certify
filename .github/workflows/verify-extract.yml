@@ -4,7 +4,7 @@
 # It uses the unified probe-verus extract pipeline (action-extract@v5) for
 # the fresh verification step instead of the older action@v3.
 #
-# The original verify.yml is preserved as a fallback.
+# The original verify.yml is kept locally (gitignored) as a debug backup.
 #
 # It performs multiple levels of verification:
 #

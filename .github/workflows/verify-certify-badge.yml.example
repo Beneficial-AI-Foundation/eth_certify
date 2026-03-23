@@ -30,9 +30,9 @@ jobs:
       # ═══════════════════════════════════════════════════════════════
       # STEP 1: Run Verus Verification
       # ═══════════════════════════════════════════════════════════════
-      - name: Run Verus verification
-        uses: beneficial-ai-foundation/probe-verus/action@v3
-        id: verify
+      - name: Run probe-verus extract
+        uses: beneficial-ai-foundation/probe-verus/action-extract@v5
+        id: extract
         with:
           project-path: .  # or ./my-verus-crate for workspaces
           # package: my-crate  # uncomment for workspace projects
@@ -41,9 +41,9 @@ jobs:
         run: |
           echo "## Verification Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Verified**: ${{ steps.verify.outputs.verified-count }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Total**: ${{ steps.verify.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Results**: ${{ steps.verify.outputs.results-file }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Verified**: ${{ steps.extract.outputs.verified-count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total**: ${{ steps.extract.outputs.total-functions }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Results**: ${{ steps.extract.outputs.extract-summary-file }}" >> $GITHUB_STEP_SUMMARY
 
       # ═══════════════════════════════════════════════════════════════
       # STEP 2: Certify on Ethereum (BAIF internal)
@@ -65,8 +65,8 @@ jobs:
         run: |
           # Create config
           cat > certify.conf << EOF
-          CERTIFY_SOURCE="${{ steps.verify.outputs.results-file }}"
-          CERTIFY_DESCRIPTION="Verus verification: ${{ steps.verify.outputs.verified-count }}/${{ steps.verify.outputs.total-functions }} - ${{ github.sha }}"
+          CERTIFY_SOURCE="${{ steps.extract.outputs.extract-summary-file }}"
+          CERTIFY_DESCRIPTION="Verus verification: ${{ steps.extract.outputs.verified-count }}/${{ steps.extract.outputs.total-functions }} - ${{ github.sha }}"
           EOF
           
           # Install deps
@@ -97,8 +97,8 @@ jobs:
       # ═══════════════════════════════════════════════════════════════
       - name: Update certification badge
         run: |
-          VERIFIED=${{ steps.verify.outputs.verified-count }}
-          TOTAL=${{ steps.verify.outputs.total-functions }}
+          VERIFIED=${{ steps.extract.outputs.verified-count }}
+          TOTAL=${{ steps.extract.outputs.total-functions }}
           
           # Determine color based on percentage
           PERCENT=$((VERIFIED * 100 / TOTAL))

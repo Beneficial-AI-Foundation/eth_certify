@@ -64,7 +64,7 @@ def main() -> int:
         "--specs-source",
         type=str,
         metavar="PATH",
-        help="Path to specs JSON (from probe-verus specify). Enables Merkle-style hashing: "
+        help="Path to specs JSON (from probe-verus extract). Enables Merkle-style hashing: "
         "content_hash = keccak256(results_hash || specs_hash)",
     )
     certify_parser.add_argument(
@@ -321,7 +321,7 @@ def main() -> int:
         "--specs-file",
         type=str,
         default=None,
-        help="Path to specs JSON (from probe-verus specify)",
+        help="Path to specs JSON (from probe-verus extract)",
     )
     proofs_parser.add_argument(
         "--output-dir",

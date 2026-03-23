@@ -35,17 +35,17 @@ Record the proof on Ethereum — permanently, publicly, independently verifiable
 # What BAIF Certify Does
 
 ```
-  Source Code        Verification        Spec             Z3 Proof           On-Chain          Public
-  + Specs            Engine              Extraction       Certificates       Certification     Badge
-┌───────────┐   ┌─────────────┐   ┌────────────┐   ┌─────────────┐   ┌────────────┐   ┌───────────┐
-│ Rust Code │──▶│   Verus     │──▶│  probe-    │──▶│  Z3 proof   │──▶│  Ethereum  │──▶│  Badge    │
-│ + Verus   │   │   + Z3 SMT  │   │  verus     │   │  production │   │  Event Log │   │ + History │
-│ Annots    │   │   Solver    │   │  specify   │   │  per func   │   │  (Merkle)  │   │ + Proofs  │
-└───────────┘   └─────────────┘   └────────────┘   └─────────────┘   └────────────┘   └───────────┘
-     Input            Proof         Spec Manifest     Proof Bundle        Record           Display
+  Source Code        Unified Pipeline     Z3 Proof           On-Chain          Public
+  + Specs            (extract)            Certificates       Certification     Badge
+┌───────────┐   ┌─────────────────┐   ┌─────────────┐   ┌────────────┐   ┌───────────┐
+│ Rust Code │──▶│  probe-verus    │──▶│  Z3 proof   │──▶│  Ethereum  │──▶│  Badge    │
+│ + Verus   │   │  extract        │   │  production │   │  Event Log │   │ + History │
+│ Annots    │   │  (verify+specs) │   │  per func   │   │  (Merkle)  │   │ + Proofs  │
+└───────────┘   └─────────────────┘   └─────────────┘   └────────────┘   └───────────┘
+     Input        Results + Specs       Proof Bundle        Record           Display
 ```
 
-Five layers: **verify**, **extract specs**, **generate Z3 proofs**, **certify (Merkle)**, **display**.
+Four layers: **extract** (verify + specs), **generate Z3 proofs**, **certify (Merkle)**, **display**.
 
 ---
 
@@ -211,25 +211,24 @@ Two main workflows:
 
 # Certification Workflow
 
-**`certify-external.yml`** — triggered manually with a repo URL, ref, and network.
+**`certify-v2.yml`** — triggered manually with a repo URL, ref, and network.
 
 ```
-┌────────────┐ ┌─────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
-│ Clone repo │ │ probe-verus │ │ probe-verus│ │ generate-  │ │ certify_cli│ │ update-    │
-│ at ref     │▶│ verify      │▶│ specify    │▶│ proofs     │▶│ certify    │▶│ registry   │
-│            │ │ +SMT logs   │ │            │ │ (Z3 proof) │ │ (Merkle)   │ │            │
-│ target/    │ │ results.json│ │ specs.json │ │proof-bundle│ │ --safe     │ │badge + hist│
-└────────────┘ └─────────────┘ └────────────┘ └────────────┘ └────────────┘ └────────────┘
-                                                                   │
-                                                                   ▼
-                                                            Ethereum Event
-                                                            tx: 0x09f0ee…
+┌────────────┐ ┌─────────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
+│ Clone repo │ │ probe-verus     │ │ generate-  │ │ certify_cli│ │ update-    │
+│ at ref     │▶│ extract         │▶│ proofs     │▶│ certify    │▶│ registry   │
+│            │ │ (unified:       │ │ (Z3 proof) │ │ (Merkle)   │ │            │
+│ target/    │ │  verify + specs)│ │proof-bundle│ │ --safe     │ │badge + hist│
+└────────────┘ └─────────────────┘ └────────────┘ └────────────┘ └────────────┘
+                                                        │
+                                                        ▼
+                                                 Ethereum Event
+                                                 tx: 0x09f0ee…
 ```
 
 | Step | What happens | Tool |
 |---|---|---|
-| **Verify** | Install Verus, run `probe-verus verify` (unified pipeline) → `results.json` + `.smt2` files | `probe-verus/action@v3` |
-| **Specify** | Extract specs from source → `specs.json` | `probe-verus specify` |
+| **Extract** | Install Verus, run `probe-verus extract` (atomize + specify + verify) → `results.json` + `specs.json` + `.smt2` files | `probe-verus/action-extract@v5` |
 | **Proofs** | Map functions to `.smt2`, run Z3 with proof production → proof bundle | `certify_cli generate-proofs` |
 | **Certify** | Merkle hash (results + specs + proofs) → sign via Gnosis Safe → submit to Ethereum | `certify_cli certify` |
 | **Registry** | Generate badge, append to `history.json`, archive results + specs + proof bundle | `certify_cli update-registry` |
@@ -241,7 +240,7 @@ Single GitHub Actions job — no human intervention after dispatch.
 
 # Verification Workflow
 
-**`verify.yml`** — triggered manually with a repo URL, commit SHA, and network.
+**`verify-v2.yml`** — triggered manually with a repo URL, commit SHA, and network.
 
 ```
 ┌──────────────────────────────────────────┐ ┌────────────┐ ┌────────────┐
@@ -749,25 +748,25 @@ Detailed workflow steps
 
 # Certification — Step 1: Verify (with SMT Logging)
 
-Uses the `probe-verus/action@v3` reusable action with extra Verus flags:
+Uses the `probe-verus/action-extract@v5` reusable action with extra Verus flags:
 
 ```yaml
-- name: Run Verus verification (with SMT logging)
-  uses: beneficial-ai-foundation/probe-verus/action@v3
+- name: Run probe-verus extract
+  uses: beneficial-ai-foundation/probe-verus/action-extract@v5
   with:
     project-path: target/${{ inputs.project_path }}
     package: ${{ inputs.package }}
     output-dir: ./output
     verus-args: '--log smt --log-dir ./verus-smt-logs -V spinoff-all'
+    taxonomy-config: ${{ inputs.taxonomy_config }}
 ```
 
 **What it does:**
 - Installs the Verus toolchain (version from `Cargo.toml`)
-- Runs `probe-verus atomize` → function inventory
-- Runs `probe-verus verify` (unified pipeline: atomize + specify + run-verus) → `results.json`
+- Runs `probe-verus extract` (unified: atomize + specify + verify) → `results.json` + `specs.json`
 - `--log smt -V spinoff-all` → per-function `.smt2` files in `verus-smt-logs/`
 
-**Outputs:** `verified-count`, `total-functions`, `verus-version`, `rust-version`, `smt-log-dir`
+**Outputs:** `extract-summary-file`, `extract-file`, `verified-count`, `total-functions`, `verus-version`, `rust-version`
 
 ---
 
@@ -891,7 +890,7 @@ matching the expected content hash.
 
 ```yaml
 - name: Run fresh Verus verification
-  uses: beneficial-ai-foundation/probe-verus/action@v3
+  uses: beneficial-ai-foundation/probe-verus/action-extract@v5
   with:
     project-path: target/${{ inputs.project_path }}
 ```

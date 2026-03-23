@@ -18,3 +18,11 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+
+# Local-only (not tracked)
+kb/
+.claude/
+
+# Legacy workflows (kept locally as debug backups)
+.github/workflows/certify-external.yml
+.github/workflows/verify.yml

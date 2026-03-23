@@ -124,17 +124,17 @@ jobs:
 
 ## With Verus Verification
 
-This action pairs well with the [probe-verus action](https://github.com/beneficial-ai-foundation/probe-verus) for certifying formal verification results:
+This action pairs well with the [probe-verus extract action](https://github.com/beneficial-ai-foundation/probe-verus) for certifying formal verification results:
 
 ```yaml
-- uses: beneficial-ai-foundation/probe-verus/action@v3
-  id: verify
+- uses: beneficial-ai-foundation/probe-verus/action-extract@v5
+  id: extract
   with:
     project-path: ./my-verus-crate
 
 - uses: Beneficial-AI-Foundation/eth_certify/action@v1
   with:
-    source: ${{ steps.verify.outputs.results-file }}
+    source: ${{ steps.extract.outputs.extract-summary-file }}
     description: "Verus verification for ${{ github.sha }}"
     network: mainnet
     rpc-url: ${{ secrets.MAINNET_RPC_URL }}

@@ -4,14 +4,14 @@ The hashes are **computed from the output files** (`results.json`, `specs.json`,
 
 ## The Output Files
 
-The probe-verus action (`beneficial-ai-foundation/probe-verus/action@v3`) produces:
+The probe-verus extract action (`beneficial-ai-foundation/probe-verus/action-extract@v5`) produces:
 
 - `./output/atoms.json` -- function inventory (NOT hashed, intermediate only)
 - `./output/results.json` -- verification results (this gets hashed as `results_hash`)
+- `./output/specs.json` -- specification manifest (hashed as `specs_hash`)
 
-Additional steps produce:
+An additional step produces:
 
-- `./output/specs.json` -- from `probe-verus specify` (hashed as `specs_hash`)
 - `./output/proof-bundle/proofs.json` -- from `certify_cli generate-proofs` (hashed as `proofs_hash`, currently optional)
 
 Since probe-verus v2.0.0, all JSON outputs are wrapped in a **Schema 2.0 metadata envelope** (`{"tool":..., "source":..., "data":...}`). The hash is computed on the **full file** (including envelope), not just the `data` payload. Certify's Python code uses `unwrap_envelope()` from `certify_cli/envelope.py` when it needs to parse the data payload.
@@ -27,7 +27,7 @@ Requires: [Foundry](https://book.getfoundry.sh/) installed (`cast` binary availa
 RESULTS_HASH=$(cast keccak < ./output/results.json)
 echo "Results hash: $RESULTS_HASH"
 
-# Hash the specs file (if you ran probe-verus specify)
+# Hash the specs file (produced by probe-verus extract)
 SPECS_HASH=$(cast keccak < ./output/specs.json)
 echo "Specs hash: $SPECS_HASH"
 

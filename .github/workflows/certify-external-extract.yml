@@ -4,7 +4,7 @@
 # (atomize + specify + run-verus in a single invocation) instead of
 # separate commands. Taxonomy labels are included in the unified output.
 #
-# The original certify-external.yml is preserved as a fallback.
+# The original certify-external.yml is kept locally (gitignored) as a debug backup.
 
 name: Certify External Project (extract)
 
