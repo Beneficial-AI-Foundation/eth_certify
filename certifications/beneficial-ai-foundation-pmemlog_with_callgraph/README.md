@@ -22,13 +22,13 @@ Add this to your project's README:
 
 ## Latest Certification
 
-- **Verified**: 70/70 functions
-- **Ref**: 3ea6578c0cac7aeab244e858947e1b023760baa1
-- **Commit**: [`3ea6578`](https://github.com/Beneficial-AI-Foundation/pmemlog_with_callgraph/commit/3ea6578c0cac7aeab244e858947e1b023760baa1)
+- **Verified**: 72/72 functions
+- **Ref**: 6fa654b2124cfe12831fa30a8d062e5b118f4526
+- **Commit**: [`6fa654b`](https://github.com/Beneficial-AI-Foundation/pmemlog_with_callgraph/commit/6fa654b2124cfe12831fa30a8d062e5b118f4526)
 - **Network**: sepolia
-- **Transaction**: [0x5a3eabf2a434bd8af1f8ffcd7df230334a59a5540867e8a8c40d0e0dee843c99](https://sepolia.etherscan.io/tx/0x5a3eabf2a434bd8af1f8ffcd7df230334a59a5540867e8a8c40d0e0dee843c99)
-- **Content Hash**: `0x8268f83a8811a93d49075b03ea080a1fbbe1ebf275a6f6e33127d53b003c9288`
-- **Results**: [results/2026-03-10T14-29-25Z.json](results/2026-03-10T14-29-25Z.json)
+- **Transaction**: [0x55ec52035e727871da5b75aa8379815e01d2d0a31975db51fa971e47df90596f](https://sepolia.etherscan.io/tx/0x55ec52035e727871da5b75aa8379815e01d2d0a31975db51fa971e47df90596f)
+- **Content Hash**: `0xdd54ed472d2291967b3aa2f554f0e3ed121e8bfd64fbf068ac14149f1a22bb66`
+- **Results**: [results/2026-03-23T12-04-24Z.json](results/2026-03-23T12-04-24Z.json)
 
 ### Toolchain
 - **Verus**: 0.2026.01.10.531beb1
