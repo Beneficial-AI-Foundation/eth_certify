@@ -1,0 +1,9 @@
+(:max-memory   21.56
+ :memory       21.56
+ :num-allocs   717176
+ :rlimit-count 9821)
+(:version "4.12.5")
+unsat
+((proof
+(mp (asserted (not true)) (rewrite (= (not true) false)) false)))
+

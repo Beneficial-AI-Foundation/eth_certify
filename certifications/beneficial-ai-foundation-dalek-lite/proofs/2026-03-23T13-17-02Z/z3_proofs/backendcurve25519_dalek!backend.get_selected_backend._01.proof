@@ -1,0 +1,19 @@
+(:max-memory   21.66
+ :memory       21.66
+ :num-allocs   753098
+ :rlimit-count 10578)
+(:version "4.12.5")
+unsat
+((proof
+(let (($x43294 ((_ is-curve25519_dalek!backend.BackendKind./Serial curve25519_dalek!backend.BackendKind./Serial  is-curve25519_dalek!backend.BackendKind./Serial) result!)))
+ (let (($x43295 (=> %%location_label%%0 $x43294)))
+ (let (($x43292 (= result! curve25519_dalek!backend.BackendKind./Serial)))
+ (let (($x43296 (=> (and $x43292 %%location_label%%0) $x43294)))
+ (let (($x43297 (not $x43296)))
+ (let ((@x43303 (rewrite (= ((_ is curve25519_dalek!backend.BackendKind./Serial ) result!) true))))
+ (let ((@x43308 (monotonicity (trans (rewrite (= $x43294 ((_ is curve25519_dalek!backend.BackendKind./Serial ) result!))) @x43303 (= $x43294 true)) (= $x43295 (=> %%location_label%%0 true)))))
+ (let ((@x43312 (trans @x43308 (rewrite (= (=> %%location_label%%0 true) true)) (= $x43295 true))))
+ (let ((@x43319 (trans (monotonicity @x43312 (= $x43296 (=> $x43292 true))) (rewrite (= (=> $x43292 true) true)) (= $x43296 true))))
+ (let ((@x43326 (trans (monotonicity @x43319 (= $x43297 (not true))) (rewrite (= (not true) false)) (= $x43297 false))))
+ (mp (asserted $x43297) @x43326 false)))))))))))))
+

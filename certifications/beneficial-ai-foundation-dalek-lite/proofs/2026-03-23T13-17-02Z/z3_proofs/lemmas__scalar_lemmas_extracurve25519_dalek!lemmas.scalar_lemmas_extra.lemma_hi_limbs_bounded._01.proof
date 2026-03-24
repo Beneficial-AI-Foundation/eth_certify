@@ -1,0 +1,33 @@
+(:max-memory   21.37
+ :memory       21.37
+ :num-allocs   653693
+ :rlimit-count 6733)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x5787 ((_ zero_extend 20) (_ bv17592186044415 44))))
+ (let ((?x5782 ((_ zero_extend 59) (_ bv20 5))))
+ (let ((?x5784 (bvlshr word7@ ?x5782)))
+ (let (($x5788 (bvule ?x5784 ?x5787)))
+ (let (($x5789 (=> %%location_label%%0 $x5788)))
+ (let (($x5790 (not $x5789)))
+ (let ((?x5822 ((_ extract 43 0) (_ bv17592186044415 64))))
+ (let ((?x5805 ((_ extract 63 20) word7@)))
+ (let ((?x5806 (concat (_ bv0 20) ?x5805)))
+ (let ((?x5823 ((_ extract 43 0) ?x5806)))
+ (let (($x5824 (bvule ?x5823 ?x5822)))
+ (let (($x5826 (= ((_ extract 63 44) ?x5806) (_ bv0 20))))
+ (let (($x5827 (and $x5826 $x5824)))
+ (let ((@x5846 (monotonicity (rewrite (= ?x5823 ?x5805)) (rewrite (= ?x5822 (_ bv17592186044415 44))) (= $x5824 (bvule ?x5805 (_ bv17592186044415 44))))))
+ (let ((@x5839 (trans (monotonicity (rewrite $x5826) (= $x5826 (= (_ bv0 20) (_ bv0 20)))) (rewrite (= (= (_ bv0 20) (_ bv0 20)) true)) (= $x5826 true))))
+ (let ((@x5853 (monotonicity @x5839 (trans @x5846 (rewrite (= (bvule ?x5805 (_ bv17592186044415 44)) true)) (= $x5824 true)) (= $x5827 (and true true)))))
+ (let ((@x5857 (trans @x5853 (rewrite (= (and true true) true)) (= $x5827 true))))
+ (let ((@x5816 (rewrite (= (concat (_ bv0 20) (_ bv17592186044415 44)) (_ bv17592186044415 64)))))
+ (let ((@x5798 (rewrite (= (concat (_ bv0 59) (_ bv20 5)) (_ bv20 64)))))
+ (let ((@x5804 (monotonicity (trans (rewrite (= ?x5782 (concat (_ bv0 59) (_ bv20 5)))) @x5798 (= ?x5782 (_ bv20 64))) (= ?x5784 (bvlshr word7@ (_ bv20 64))))))
+ (let ((@x5821 (monotonicity (trans @x5804 (rewrite (= (bvlshr word7@ (_ bv20 64)) ?x5806)) (= ?x5784 ?x5806)) (trans (rewrite (= ?x5787 (concat (_ bv0 20) (_ bv17592186044415 44)))) @x5816 (= ?x5787 (_ bv17592186044415 64))) (= $x5788 (bvule ?x5806 (_ bv17592186044415 64))))))
+ (let ((@x5859 (trans (trans @x5821 (rewrite (= (bvule ?x5806 (_ bv17592186044415 64)) $x5827)) (= $x5788 $x5827)) @x5857 (= $x5788 true))))
+ (let ((@x5866 (trans (monotonicity @x5859 (= $x5789 (=> %%location_label%%0 true))) (rewrite (= (=> %%location_label%%0 true) true)) (= $x5789 true))))
+ (let ((@x5873 (trans (monotonicity @x5866 (= $x5790 (not true))) (rewrite (= (not true) false)) (= $x5790 false))))
+ (mp (asserted $x5790) @x5873 false)))))))))))))))))))))))))))
+

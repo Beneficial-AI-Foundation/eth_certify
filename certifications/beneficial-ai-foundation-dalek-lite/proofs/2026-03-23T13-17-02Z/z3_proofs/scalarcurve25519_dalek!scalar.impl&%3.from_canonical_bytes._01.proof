@@ -1,0 +1,30 @@
+(:max-memory   24.21
+ :memory       24.21
+ :num-allocs   2288244
+ :rlimit-count 55601)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x39720 ((_ extract 7 7) high_byte@)))
+ (let (($x39721 (= ?x39720 (_ bv0 1))))
+ (let (($x39762 (not $x39721)))
+ (let (($x39819 (not (or (not %%location_label%%0) $x39721))))
+ (let (($x39752 (=> %%location_label%%0 (= (bvlshr high_byte@ ((_ zero_extend 5) (_ bv7 3))) ((_ zero_extend 7) (_ bv0 1))))))
+ (let (($x39753 (not $x39752)))
+ (let ((@x39757 (mp (asserted $x39753) (rewrite (= $x39753 $x39819)) $x39819)))
+ (let ((@x39763 (not-or-elim @x39757 $x39762)))
+ (let ((@x39740 (rewrite (= (and $x39721 true) $x39721))))
+ (let (($x39736 (and $x39721 true)))
+ (let ((?x39717 ((_ extract 6 0) (_ bv127 8))))
+ (let ((?x39718 ((_ extract 6 0) high_byte@)))
+ (let (($x39719 (bvule ?x39718 ?x39717)))
+ (let (($x39722 (and $x39721 $x39719)))
+ (let ((@x39735 (trans (monotonicity (rewrite (= ?x39717 (_ bv127 7))) (= $x39719 (bvule ?x39718 (_ bv127 7)))) (rewrite (= (bvule ?x39718 (_ bv127 7)) true)) (= $x39719 true))))
+ (let ((@x39742 (trans (monotonicity @x39735 (= $x39722 $x39736)) @x39740 (= $x39722 $x39721))))
+ (let ((@x39695 (rewrite (= (concat (_ bv0 1) (_ bv127 7)) (_ bv127 8)))))
+ (let ((@x39713 (trans (rewrite (= ((_ zero_extend 1) (_ bv127 7)) (concat (_ bv0 1) (_ bv127 7)))) @x39695 (= ((_ zero_extend 1) (_ bv127 7)) (_ bv127 8)))))
+ (let ((@x39716 (monotonicity @x39713 (= (bvule high_byte@ ((_ zero_extend 1) (_ bv127 7))) (bvule high_byte@ (_ bv127 8))))))
+ (let ((@x39726 (trans @x39716 (rewrite (= (bvule high_byte@ (_ bv127 8)) $x39722)) (= (bvule high_byte@ ((_ zero_extend 1) (_ bv127 7))) $x39722))))
+ (let ((@x39745 (mp (asserted (bvule high_byte@ ((_ zero_extend 1) (_ bv127 7)))) (trans @x39726 @x39742 (= (bvule high_byte@ ((_ zero_extend 1) (_ bv127 7))) $x39721)) $x39721)))
+ (unit-resolution @x39745 @x39763 false))))))))))))))))))))))))
+

@@ -1,0 +1,23 @@
+(:max-memory   21.56
+ :memory       21.56
+ :num-allocs   717176
+ :rlimit-count 9608)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x8089 (Poly%tuple%2. (curve25519_dalek!specs.ristretto_specs.spec_ristretto_basepoint.? (I 0)))))
+ (let ((?x6469 (Poly%curve25519_dalek!ristretto.RistrettoBasepointTable. curve25519_dalek!constants.RISTRETTO_BASEPOINT_TABLE.?)))
+ (let ((?x8085 (%Poly%curve25519_dalek!ristretto.RistrettoBasepointTable. ?x6469)))
+ (let ((?x8086 (curve25519_dalek!ristretto.RistrettoBasepointTable./RistrettoBasepointTable/0 ?x8085)))
+ (let (($x8090 (curve25519_dalek!specs.edwards_specs.is_valid_edwards_basepoint_table.? (Poly%curve25519_dalek!edwards.EdwardsBasepointTable. ?x8086) ?x8089)))
+ (let (($x47328 (=> %%location_label%%0 $x8090)))
+ (let (($x47329 (=> (and $x8090 %%location_label%%0) $x8090)))
+ (let (($x47326 (ens%curve25519_dalek!specs.edwards_specs.axiom_ed25519_basepoint_table_valid. 0)))
+ (let (($x47330 (=> (and $x47326 $x8090 %%location_label%%0) $x8090)))
+ (let (($x47331 (not $x47330)))
+ (let ((@x47339 (monotonicity (rewrite (= $x47328 (or (not %%location_label%%0) $x8090))) (= $x47329 (=> $x8090 (or (not %%location_label%%0) $x8090))))))
+ (let ((@x47343 (trans @x47339 (rewrite (= (=> $x8090 (or (not %%location_label%%0) $x8090)) true)) (= $x47329 true))))
+ (let ((@x47350 (trans (monotonicity @x47343 (= $x47330 (=> $x47326 true))) (rewrite (= (=> $x47326 true) true)) (= $x47330 true))))
+ (let ((@x47357 (trans (monotonicity @x47350 (= $x47331 (not true))) (rewrite (= (not true) false)) (= $x47331 false))))
+ (mp (asserted $x47331) @x47357 false)))))))))))))))))
+

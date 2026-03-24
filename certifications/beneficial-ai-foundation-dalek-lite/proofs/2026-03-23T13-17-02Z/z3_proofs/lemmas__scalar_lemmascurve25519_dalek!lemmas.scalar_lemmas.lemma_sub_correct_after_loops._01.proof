@@ -1,0 +1,36 @@
+(:max-memory   21.76
+ :memory       21.76
+ :num-allocs   793982
+ :rlimit-count 12630)
+(:version "4.12.5")
+unsat
+((declare-fun k!960 () (_ BitVec 1))
+(proof
+(let (($x58215 (= (_ bv0 1) k!960)))
+ (let (($x58220 (not $x58215)))
+ (let ((@x58219 (symm (commutativity (= $x58215 (= k!960 (_ bv0 1)))) (= (= k!960 (_ bv0 1)) $x58215))))
+ (let (($x14388 (= k!960 (_ bv0 1))))
+ (let (($x14410 (not $x14388)))
+ (let ((?x9970 ((_ extract 63 63) borrow!)))
+ (let (($x10305 (= ?x9970 (_ bv0 1))))
+ (let (($x10035 (not $x10305)))
+ (let (($x10336 (not (or (not %%location_label%%0) (= ?x9970 (_ bv1 1)) $x10305))))
+ (let (($x9980 (or (= (bvlshr borrow! ((_ zero_extend 58) (_ bv63 6))) ((_ zero_extend 63) (_ bv1 1))) (= (bvlshr borrow! ((_ zero_extend 58) (_ bv63 6))) ((_ zero_extend 63) (_ bv0 1))))))
+ (let (($x10222 (not (=> %%location_label%%0 $x9980))))
+ (let ((@x10017 (mp (asserted $x10222) (rewrite (= $x10222 $x10336)) $x10336)))
+ (let ((@x10060 (not-or-elim @x10017 $x10035)))
+ (let ((@x14463 (mp (mp @x10060 (rewrite (= $x10035 $x10035)) $x10035) (rewrite (= $x10035 $x14410)) $x14410)))
+ (let (($x57251 (= ((_ extract 0 0) k!960) (_ bv1 1))))
+ (let (($x58232 (not $x57251)))
+ (let (($x58214 (= (_ bv1 1) k!960)))
+ (let (($x58228 (not $x58214)))
+ (let ((@x58227 (symm (commutativity (= $x58214 (= k!960 (_ bv1 1)))) (= (= k!960 (_ bv1 1)) $x58214))))
+ (let (($x14411 (= k!960 (_ bv1 1))))
+ (let (($x14481 (not $x14411)))
+ (let (($x10264 (= ?x9970 (_ bv1 1))))
+ (let (($x10039 (not $x10264)))
+ (let ((@x10065 (not-or-elim @x10017 $x10039)))
+ (let ((@x14484 (mp (mp @x10065 (rewrite (= $x10039 $x10039)) $x10039) (rewrite (= $x10039 $x14481)) $x14481)))
+ (let ((@x58235 (unit-resolution ((_ th-lemma bv) (or $x58214 $x58232)) (mp @x14484 (monotonicity @x58227 (= $x14481 $x58228)) $x58228) $x58232)))
+ (unit-resolution ((_ th-lemma bv) (or $x58215 $x57251)) @x58235 (mp @x14463 (monotonicity @x58219 (= $x14410 $x58220)) $x58220) false)))))))))))))))))))))))))))))
+

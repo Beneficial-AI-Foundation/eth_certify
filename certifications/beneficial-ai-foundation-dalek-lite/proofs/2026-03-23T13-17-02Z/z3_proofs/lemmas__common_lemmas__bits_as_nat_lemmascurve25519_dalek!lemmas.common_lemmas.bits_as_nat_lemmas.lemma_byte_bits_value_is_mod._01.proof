@@ -1,0 +1,22 @@
+(:max-memory   21.46
+ :memory       21.46
+ :num-allocs   684850
+ :rlimit-count 7265)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x6230 ((_ zero_extend 7) (_ bv0 1))))
+ (let ((?x6228 ((_ zero_extend 4) (_ bv8 4))))
+ (let ((?x6229 (bvlshr byte! ?x6228)))
+ (let (($x6231 (= ?x6229 ?x6230)))
+ (let (($x6232 (=> %%location_label%%0 $x6231)))
+ (let (($x6233 (not $x6232)))
+ (let ((@x6257 (rewrite (= (concat (_ bv0 7) (_ bv0 1)) (_ bv0 8)))))
+ (let ((@x6241 (rewrite (= (concat (_ bv0 4) (_ bv8 4)) (_ bv8 8)))))
+ (let ((@x6246 (monotonicity (trans (rewrite (= ?x6228 (concat (_ bv0 4) (_ bv8 4)))) @x6241 (= ?x6228 (_ bv8 8))) (= ?x6229 (bvlshr byte! (_ bv8 8))))))
+ (let ((@x6262 (monotonicity (trans @x6246 (rewrite (= (bvlshr byte! (_ bv8 8)) (_ bv0 8))) (= ?x6229 (_ bv0 8))) (trans (rewrite (= ?x6230 (concat (_ bv0 7) (_ bv0 1)))) @x6257 (= ?x6230 (_ bv0 8))) (= $x6231 (= (_ bv0 8) (_ bv0 8))))))
+ (let ((@x6269 (monotonicity (trans @x6262 (rewrite (= (= (_ bv0 8) (_ bv0 8)) true)) (= $x6231 true)) (= $x6232 (=> %%location_label%%0 true)))))
+ (let ((@x6273 (trans @x6269 (rewrite (= (=> %%location_label%%0 true) true)) (= $x6232 true))))
+ (let ((@x6280 (trans (monotonicity @x6273 (= $x6233 (not true))) (rewrite (= (not true) false)) (= $x6233 false))))
+ (mp (asserted $x6233) @x6280 false))))))))))))))))
+

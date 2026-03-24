@@ -1,0 +1,18 @@
+(:max-memory   23.14
+ :memory       23.14
+ :num-allocs   1448086
+ :rlimit-count 41995)
+(:version "4.12.5")
+unsat
+((proof
+(let ((?x549207 (Poly%curve25519_dalek!montgomery.MontgomeryPoint. self!)))
+ (let ((?x549212 (curve25519_dalek!montgomery.MontgomeryPoint./MontgomeryPoint/0 (%Poly%curve25519_dalek!montgomery.MontgomeryPoint. ?x549207))))
+ (let (($x549213 (= result! ?x549212)))
+ (let (($x549215 (=> %%location_label%%0 $x549213)))
+ (let (($x549216 (=> (and $x549213 %%location_label%%0) $x549213)))
+ (let (($x549217 (not $x549216)))
+ (let ((@x549225 (monotonicity (rewrite (= $x549215 (or (not %%location_label%%0) $x549213))) (= $x549216 (=> $x549213 (or (not %%location_label%%0) $x549213))))))
+ (let ((@x549229 (trans @x549225 (rewrite (= (=> $x549213 (or (not %%location_label%%0) $x549213)) true)) (= $x549216 true))))
+ (let ((@x549236 (trans (monotonicity @x549229 (= $x549217 (not true))) (rewrite (= (not true) false)) (= $x549217 false))))
+ (mp (asserted $x549217) @x549236 false))))))))))))
+
