@@ -212,12 +212,27 @@ def generate_z3_proof(
 ) -> Z3ProofResult:
     """Run Z3 on an .smt2 file with proof production enabled.
 
-    Uses the legacy proof mode (set-option :proof true) with (get-proof)
-    injected after (check-sat), as this is compatible with Z3's default
-    core which Verus tunes for.
+    Uses the SMT-LIB standard proof mode: ``(set-option :proof true)``
+    with ``(get-proof)`` injected after ``(check-sat)``.  This works with
+    Z3's default solver core, which is the core Verus tunes its SMT
+    queries for (trigger patterns, quantifier strategies, arithmetic
+    hints).
 
-    The sat.euf=true proof log mode crashes on complex Verus queries,
-    so we use the legacy approach instead.
+    Z3 also offers a newer proof-log mode via ``sat.euf=true`` (available
+    since Z3 4.12.0) that uses a different SAT-based solver core with
+    self-validation and proof trimming.  We do not use it because:
+
+    1. Verus queries are tuned for the default core; switching cores
+       changes heuristics and causes previously-solved queries to fail.
+    2. The ``sat.euf`` core crashes on complex Verus-scale queries
+       (see https://github.com/Z3Prover/z3/issues/5336).
+    3. Legacy mode is the SMT-LIB-standard mechanism (``get-proof``),
+       while ``sat.euf`` proof logging is a Z3-specific extension.
+
+    Even with legacy proof mode, enabling proof production changes solver
+    behavior (disables lemma forgetting, forces justification tracking),
+    so some complex queries that Z3 solves without proofs return
+    "unknown" when proofs are requested.
     """
     import time
 

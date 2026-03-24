@@ -920,22 +920,4 @@ but the semantic result (verified/total counts) should match.
 
 ---
 
-# The Reusable Action
-
-**`action/action.yml`** — lets any BAIF repository certify content in their own workflows:
-
-```yaml
-- uses: Beneficial-AI-Foundation/eth_certify/action@main
-  with:
-    source: ./output/results.json
-    description: "My project: 72/72 verified"
-    network: mainnet
-    rpc-url: ${{ secrets.MAINNET_RPC_URL }}
-    private-key: ${{ secrets.PRIVATE_KEY }}
-    certify-address: ${{ vars.CERTIFY_ADDRESS }}
-    safe-address: ${{ vars.SAFE_ADDRESS }}
-```
-
-**Outputs:** `tx-hash`, `content-hash`, `etherscan-url`
-
 ---

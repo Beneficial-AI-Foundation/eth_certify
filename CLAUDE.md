@@ -104,8 +104,6 @@ certify_cli/
   registry.py           # Certification registry management (badges, history)
   safe.py               # Gnosis Safe transaction integration
   foundry.py            # Forge subprocess wrapper + URL fetching + SSRF validation
-action/
-  action.yml            # Reusable GitHub Action for certification
 certifications/         # On-disk certification registry (per-project folders)
 kb/                     # Knowledge base (source of truth)
 doc/                    # Design documents, reviews, proposals (reference, not normative)

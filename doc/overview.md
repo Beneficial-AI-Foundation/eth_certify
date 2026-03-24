@@ -79,49 +79,6 @@ Verus produces per-function `.smt2` files (Z3 formulas) used for proof certifica
 
 ---
 
-### 2. Certify Action (`baif/eth_certify/action`)
-
-**Location:** This repository (`action/`)
-
-A reusable composite GitHub Action that certifies content hashes on Ethereum.
-
-**Features:**
-- Hashes verification results using keccak256 (Merkle root of results, specs, and proofs)
-- Submits certification transaction to Ethereum
-- Supports both direct signing and Gnosis Safe multisig
-- Works with mainnet and Sepolia testnet
-- Automatic transaction execution for 1-of-N Safes
-
-**Inputs:**
-- `source`: File to certify (required)
-- `description`: Description of the certification
-- `network`: `mainnet` or `sepolia`
-- `private-key`: Ethereum private key for signing
-- `rpc-url`: Ethereum RPC endpoint
-- `certify-address`: Deployed Certify contract address
-- `safe-address`: Optional Gnosis Safe address
-- `safe-execute`: Whether to execute Safe transaction programmatically
-
-**Outputs:**
-- `tx_hash`: Transaction hash of the certification
-- `content_hash`: Keccak256 hash of the certified content
-
-**Usage:**
-```yaml
-- uses: Beneficial-AI-Foundation/eth_certify/action@main
-  with:
-    source: './results.json'
-    description: 'Verification results for my-project'
-    network: mainnet
-    private-key: ${{ secrets.PRIVATE_KEY }}
-    rpc-url: ${{ secrets.RPC_URL }}
-    certify-address: ${{ vars.CERTIFY_ADDRESS }}
-    safe-address: ${{ vars.SAFE_ADDRESS }}
-    safe-execute: 'true'
-```
-
----
-
 ## Workflows Created
 
 ### 1. Certify External Project (`certify-external.yml`)
@@ -389,9 +346,6 @@ This enables:
 
 ```
 eth_certify/
-├── action/
-│   ├── action.yml          # Certify GitHub Action
-│   └── README.md           # Action documentation
 ├── certifications/
 │   ├── README.md           # Registry overview
 │   └── {project-id}/       # Per-project certification data
