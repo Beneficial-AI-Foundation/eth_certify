@@ -197,7 +197,7 @@ jobs:
             --verified "${{ steps.outputs.outputs.verified_count }}" \
             --total "${{ steps.outputs.outputs.total_functions }}" \
             --lean-version "${{ steps.outputs.outputs.lean_version }}" \
-            --sorry-count "${{ steps.outputs.outputs.sorry_count }}" \
+            --unverified-count "${{ steps.outputs.outputs.unverified_count }}" \
             $SPECS_FLAG \
           >> $GITHUB_STEP_SUMMARY
 

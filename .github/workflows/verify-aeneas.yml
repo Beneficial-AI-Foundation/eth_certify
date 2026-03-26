@@ -305,5 +305,5 @@ jobs:
             --fresh-total "${{ steps.fresh-extract.outputs.total_functions }}" \
             --specs-hash "${{ steps.verify-local.outputs.specs_hash }}" \
             --etherscan-url "${{ steps.verify-onchain.outputs.etherscan_url }}" \
-            --sorry-count "${{ steps.fresh-extract.outputs.sorry_count }}" \
+            --unverified-count "${{ steps.fresh-extract.outputs.unverified_count }}" \
           >> $GITHUB_STEP_SUMMARY

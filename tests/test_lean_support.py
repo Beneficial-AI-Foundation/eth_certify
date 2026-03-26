@@ -63,7 +63,7 @@ def _make_atoms_json(tmp_path: Path, atoms: dict, envelope: bool = True) -> Path
 class TestResolveLeanExtract:
     """resolve_lean_extract.py parses atoms.json correctly."""
 
-    def test_counts_verified_and_sorry(self, tmp_path):
+    def test_counts_verified_and_unverified(self, tmp_path):
         atoms = {
             "probe:verified_fn": {
                 "verification-status": "verified",
@@ -71,8 +71,8 @@ class TestResolveLeanExtract:
                 "is-relevant": True,
                 "kind": "theorem",
             },
-            "probe:sorry_fn": {
-                "verification-status": "has-sorry",
+            "probe:unverified_fn": {
+                "verification-status": "unverified",
                 "is-in-package": True,
                 "is-relevant": True,
                 "kind": "def",
@@ -89,7 +89,7 @@ class TestResolveLeanExtract:
 
         assert outputs["verified_count"] == "2"
         assert outputs["total_functions"] == "3"
-        assert outputs["sorry_count"] == "1"
+        assert outputs["unverified_count"] == "1"
 
     def test_excludes_non_package_atoms(self, tmp_path):
         atoms = {
@@ -189,7 +189,7 @@ class TestResolveLeanExtract:
 
         assert outputs["verified_count"] == "0"
         assert outputs["total_functions"] == "0"
-        assert outputs["sorry_count"] == "0"
+        assert outputs["unverified_count"] == "0"
 
 
 # ---------------------------------------------------------------------------

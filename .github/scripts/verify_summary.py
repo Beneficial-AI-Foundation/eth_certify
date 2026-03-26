@@ -43,7 +43,7 @@ def build_summary(args: argparse.Namespace) -> str:
     # Certification record
     lean_version = getattr(args, "lean_version", "")
     verus_version = getattr(args, "verus_version", "")
-    sorry_count = getattr(args, "sorry_count", "")
+    unverified_count = getattr(args, "unverified_count", "")
 
     lines.extend([
         "### Certification Record",
@@ -56,8 +56,8 @@ def build_summary(args: argparse.Namespace) -> str:
         lines.append(f"| Lean Version | {lean_version} |")
     if verus_version:
         lines.append(f"| Verus Version | {verus_version} |")
-    if sorry_count and sorry_count != "0":
-        lines.append(f"| Contains sorry | {sorry_count} declarations |")
+    if unverified_count and unverified_count != "0":
+        lines.append(f"| Unverified | {unverified_count} declarations |")
     if args.proof_bundle:
         lines.append(f"| Proof Bundle | `{args.proof_bundle}` |")
     if args.etherscan_url:
@@ -165,7 +165,7 @@ def main() -> None:
     parser.add_argument("--total", required=True)
     parser.add_argument("--verus-version", default="")
     parser.add_argument("--lean-version", default="")
-    parser.add_argument("--sorry-count", default="")
+    parser.add_argument("--unverified-count", default="")
     parser.add_argument("--stored", required=True)
     parser.add_argument("--merkle", required=True)
     parser.add_argument("--proofs-check", required=True)

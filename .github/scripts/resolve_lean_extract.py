@@ -14,7 +14,7 @@ Outputs (to stdout, ready for >> $GITHUB_OUTPUT):
   functions_file=<absolute path to functions.json, or empty>
   verified_count=<int>
   total_functions=<int>
-  sorry_count=<int>
+  unverified_count=<int>
   lean_version=<version string>
 """
 
@@ -53,7 +53,7 @@ def resolve(
 
     verified = 0
     total = 0
-    sorry = 0
+    unverified = 0
 
     for atom in data.values():
         if not isinstance(atom, dict):
@@ -67,12 +67,12 @@ def resolve(
         status = atom.get("verification-status", "")
         if status == "verified":
             verified += 1
-        elif status == "has-sorry":
-            sorry += 1
+        elif status == "unverified":
+            unverified += 1
 
     outputs["verified_count"] = str(verified)
     outputs["total_functions"] = str(total)
-    outputs["sorry_count"] = str(sorry)
+    outputs["unverified_count"] = str(unverified)
 
     # Extract lean version: prefer envelope source metadata, fall back to lean-toolchain file
     lean_version = ""
