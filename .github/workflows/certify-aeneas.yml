@@ -1,0 +1,326 @@
+# Certify External Aeneas/Lean Projects (Python-backed, probe-lean + probe-aeneas)
+#
+# Uses certify_cli --json output piped through workflow helper scripts.
+# All business logic lives in certify_cli; scripts handle only:
+#   - probe-lean atoms.json parsing (resolve_lean_extract.py)
+#   - JSON-to-GITHUB_OUTPUT bridging (workflow_utils.py)
+#   - GITHUB_STEP_SUMMARY markdown (certify_summary.py)
+#
+# 2-leaf Merkle: content_hash = keccak256(keccak256(atoms.json) || keccak256(functions.json))
+
+name: Certify Aeneas Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'GitHub repository URL (e.g., https://github.com/owner/repo)'
+        required: true
+        type: string
+      project_path:
+        description: 'Path to Lean project within repo (default: . for root)'
+        required: false
+        default: '.'
+        type: string
+      package:
+        description: 'Package name for workspace projects (optional)'
+        required: false
+        default: ''
+        type: string
+      ref:
+        description: 'Git ref to certify (branch, tag, or commit SHA)'
+        required: false
+        default: 'main'
+        type: string
+      network:
+        description: 'Ethereum network for certification'
+        required: false
+        default: 'mainnet'
+        type: choice
+        options:
+          - mainnet
+          - sepolia
+
+permissions:
+  contents: write
+
+jobs:
+  certify-aeneas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout certify repo
+        uses: actions/checkout@v4
+        with:
+          path: certify
+          submodules: recursive
+
+      - name: Parse repository info
+        id: repo
+        run: |
+          python3 certify/.github/scripts/workflow_utils.py parse-repo \
+            "${{ inputs.repo_url }}" >> $GITHUB_OUTPUT
+
+      - name: Checkout target project
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.repo.outputs.repo_path }}
+          ref: ${{ inputs.ref }}
+          path: target
+
+      - name: Get commit SHA
+        id: commit
+        working-directory: target
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      # ═══════════════════════════════════════════════════════════════
+      # Common tooling
+      # ═══════════════════════════════════════════════════════════════
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install certify dependencies
+        working-directory: certify
+        run: uv sync
+
+      # ═══════════════════════════════════════════════════════════════
+      # Lean tooling
+      # ═══════════════════════════════════════════════════════════════
+      - name: Install elan (Lean version manager)
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - name: Verify elan installation
+        run: |
+          elan --version
+          lean --version
+
+      - name: Cache Lean build
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/.lake
+          key: ${{ runner.os }}-lean-${{ hashFiles('target/lean-toolchain') }}-${{ hashFiles('target/lakefile.toml') }}-${{ hashFiles('target/lake-manifest.json') }}-${{ hashFiles('target/**/*.lean') }}
+          restore-keys: |
+            ${{ runner.os }}-lean-${{ hashFiles('target/lean-toolchain') }}-${{ hashFiles('target/lakefile.toml') }}-${{ hashFiles('target/lake-manifest.json') }}-
+            ${{ runner.os }}-lean-${{ hashFiles('target/lean-toolchain') }}-
+            ${{ runner.os }}-lean-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1: Build Lean project and run probe-lean + probe-aeneas
+      # ═══════════════════════════════════════════════════════════════
+      - name: Download dependency caches
+        working-directory: target/${{ inputs.project_path }}
+        run: lake exe cache get || true
+
+      - name: Build Lean project
+        working-directory: target/${{ inputs.project_path }}
+        env:
+          LEAN_ABORT_ON_PANIC: 1
+        run: lake build 2>&1 | tee build_output.txt
+
+      - name: Cache probe-lean binary
+        id: cache-probe-lean
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/probe-lean
+          key: probe-lean-${{ runner.os }}-${{ hashFiles('target/lean-toolchain') }}-v1
+
+      - name: Install probe-lean
+        if: steps.cache-probe-lean.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/Beneficial-AI-Foundation/probe-lean.git /tmp/probe-lean
+          cd /tmp/probe-lean && lake build
+          mkdir -p ~/.local/bin
+          cp .lake/build/bin/probe-lean ~/.local/bin/
+
+      - name: Cache probe-aeneas binary
+        id: cache-probe-aeneas
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/probe-aeneas
+          key: probe-aeneas-${{ runner.os }}-v3
+
+      - name: Install probe-aeneas
+        if: steps.cache-probe-aeneas.outputs.cache-hit != 'true'
+        run: cargo install --git https://github.com/Beneficial-AI-Foundation/probe-aeneas
+
+      - name: Add local bin to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Extract atoms
+        working-directory: target/${{ inputs.project_path }}
+        run: probe-lean extract --from-file build_output.txt -o atoms.json .
+
+      - name: Generate functions.json
+        working-directory: target/${{ inputs.project_path }}
+        run: probe-aeneas listfuns --lean-project . --atoms atoms.json -o functions.json
+
+      - name: Resolve extract output
+        id: outputs
+        run: |
+          PROJECT_PATH="target/${{ inputs.project_path }}"
+
+          FUNCS_ARG=""
+          if [ -f "$PROJECT_PATH/functions.json" ]; then
+            FUNCS_ARG="--functions-file $PROJECT_PATH/functions.json"
+          fi
+
+          python3 certify/.github/scripts/resolve_lean_extract.py \
+            --atoms-file "$PROJECT_PATH/atoms.json" \
+            $FUNCS_ARG \
+            --lean-toolchain-file "target/lean-toolchain" \
+            >> $GITHUB_OUTPUT
+
+      - name: Verification summary
+        run: |
+          SPECS_FLAG=""
+          if [ -n "${{ steps.outputs.outputs.functions_file }}" ]; then
+            SPECS_FLAG="--specs"
+          fi
+
+          python3 certify/.github/scripts/certify_summary.py \
+            --phase verification \
+            --repo "${{ steps.repo.outputs.repo_path }}" \
+            --ref "${{ inputs.ref }}" \
+            --commit "${{ steps.commit.outputs.sha }}" \
+            --verified "${{ steps.outputs.outputs.verified_count }}" \
+            --total "${{ steps.outputs.outputs.total_functions }}" \
+            --lean-version "${{ steps.outputs.outputs.lean_version }}" \
+            --sorry-count "${{ steps.outputs.outputs.sorry_count }}" \
+            $SPECS_FLAG \
+          >> $GITHUB_STEP_SUMMARY
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 2: Certify on Ethereum (2-leaf Merkle)
+      # ═══════════════════════════════════════════════════════════════
+      - name: Certify on ${{ inputs.network }}
+        id: certify
+        working-directory: certify
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          MAINNET_PRIVATE_KEY: ${{ secrets.MAINNET_PRIVATE_KEY }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          CERTIFY_ADDRESS: ${{ inputs.network == 'mainnet' && vars.MAINNET_CERTIFIER_ADDRESS || vars.SEPOLIA_CERTIFIER_ADDRESS }}
+        run: |
+          NETWORK="${{ inputs.network }}"
+          RESULTS_FILE="${{ steps.outputs.outputs.results_file }}"
+          FUNCTIONS_FILE="${{ steps.outputs.outputs.functions_file }}"
+          COMMIT_SHA="${{ steps.commit.outputs.sha }}"
+
+          SPECS_ARG=""
+          if [ -n "$FUNCTIONS_FILE" ] && [ -f "$FUNCTIONS_FILE" ]; then
+            SPECS_ARG="--specs-source $FUNCTIONS_FILE"
+          fi
+
+          SAFE_ARGS=""
+          if [ "$NETWORK" = "mainnet" ]; then
+            SAFE_ADDR="${{ vars.MAINNET_SAFE_ADDRESS }}"
+            SAFE_ARGS="--safe $SAFE_ADDR --execute"
+          fi
+
+          DESCRIPTION="BAIF Certification (Aeneas/Lean): ${{ steps.repo.outputs.repo_path }}@${{ inputs.ref }} - ${{ steps.outputs.outputs.verified_count }}/${{ steps.outputs.outputs.total_functions }} verified"
+
+          JSON_OUT=$(uv run python -m certify_cli certify \
+            --source "$RESULTS_FILE" \
+            --description "$DESCRIPTION" \
+            --network "$NETWORK" \
+            --commit-sha "$COMMIT_SHA" \
+            $SPECS_ARG $SAFE_ARGS \
+            --json)
+
+          echo "$JSON_OUT" | python3 .github/scripts/workflow_utils.py json-to-output \
+            tx_hash content_hash results_hash specs_hash etherscan_url \
+          >> $GITHUB_OUTPUT
+
+          TX_HASH=$(echo "$JSON_OUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tx_hash',''))")
+          if [ -z "$TX_HASH" ] || [ "$TX_HASH" = "None" ]; then
+            echo "::error::Certification failed - no transaction hash"
+            exit 1
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 3: Update Certification Registry
+      # ═══════════════════════════════════════════════════════════════
+      - name: Update certification registry
+        working-directory: certify
+        run: |
+          LEAN_VERSION="${{ steps.outputs.outputs.lean_version }}"
+          RESULTS_FILE="${{ steps.outputs.outputs.results_file }}"
+          FUNCTIONS_FILE="${{ steps.outputs.outputs.functions_file }}"
+
+          CMD="uv run python -m certify_cli update-registry"
+          CMD="$CMD --cert-id \"${{ steps.repo.outputs.cert_id }}\""
+          CMD="$CMD --repo \"${{ steps.repo.outputs.repo_path }}\""
+          CMD="$CMD --ref \"${{ inputs.ref }}\""
+          CMD="$CMD --network \"${{ inputs.network }}\""
+          CMD="$CMD --verified \"${{ steps.outputs.outputs.verified_count }}\""
+          CMD="$CMD --total \"${{ steps.outputs.outputs.total_functions }}\""
+          CMD="$CMD --tx-hash \"${{ steps.certify.outputs.tx_hash }}\""
+          CMD="$CMD --content-hash \"${{ steps.certify.outputs.content_hash }}\""
+          CMD="$CMD --commit-sha \"${{ steps.commit.outputs.sha }}\""
+
+          if [ -n "$LEAN_VERSION" ]; then
+            CMD="$CMD --lean-version \"$LEAN_VERSION\""
+          fi
+          if [ -n "$RESULTS_FILE" ] && [ -f "$RESULTS_FILE" ]; then
+            CMD="$CMD --results-file \"$RESULTS_FILE\""
+          fi
+          if [ -n "$FUNCTIONS_FILE" ] && [ -f "$FUNCTIONS_FILE" ]; then
+            CMD="$CMD --specs-file \"$FUNCTIONS_FILE\""
+          fi
+
+          RESULTS_HASH="${{ steps.certify.outputs.results_hash }}"
+          SPECS_HASH="${{ steps.certify.outputs.specs_hash }}"
+
+          if [ -n "$RESULTS_HASH" ] && [ "$RESULTS_HASH" != "None" ]; then
+            CMD="$CMD --results-hash \"$RESULTS_HASH\""
+          fi
+          if [ -n "$SPECS_HASH" ] && [ "$SPECS_HASH" != "None" ]; then
+            CMD="$CMD --specs-hash \"$SPECS_HASH\""
+          fi
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Commit certification
+        working-directory: certify
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add certifications/
+
+          if ! git diff --cached --quiet; then
+            git commit -m "cert(aeneas): ${{ steps.repo.outputs.repo_path }}@${{ inputs.ref }} (${{ steps.outputs.outputs.verified_count }}/${{ steps.outputs.outputs.total_functions }})"
+            git push
+            echo "Certification committed"
+          else
+            echo "No changes to commit"
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 4: Summary
+      # ═══════════════════════════════════════════════════════════════
+      - name: Final summary
+        run: |
+          python3 certify/.github/scripts/certify_summary.py \
+            --phase final \
+            --repo "${{ steps.repo.outputs.repo_path }}" \
+            --cert-id "${{ steps.repo.outputs.cert_id }}" \
+            --tx-hash "${{ steps.certify.outputs.tx_hash }}" \
+            --etherscan-url "${{ steps.certify.outputs.etherscan_url }}" \
+          >> $GITHUB_STEP_SUMMARY

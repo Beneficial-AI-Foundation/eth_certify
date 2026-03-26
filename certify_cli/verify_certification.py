@@ -57,6 +57,7 @@ class VerifyCertificationResult:
                     "network": self.cert_entry.get("network", ""),
                     "network_match": self.network_match,
                     "verus_version": self.cert_entry.get("verus_version", ""),
+                    "lean_version": self.cert_entry.get("lean_version", ""),
                     "results_hash": self.cert_entry.get("results_hash", ""),
                     "specs_hash": self.cert_entry.get("specs_hash", ""),
                     "proofs_hash": self.cert_entry.get("proofs_hash", ""),
@@ -101,7 +102,12 @@ class VerifyCertificationResult:
             file=out,
         )
         print(f"  Network:       {entry.get('network', '')}", file=out)
-        print(f"  Verus Version: {entry.get('verus_version', '')}", file=out)
+        if entry.get("lean_version"):
+            print(f"  Lean Version:  {entry.get('lean_version', '')}", file=out)
+        if entry.get("verus_version"):
+            print(f"  Verus Version: {entry.get('verus_version', '')}", file=out)
+        if not entry.get("lean_version") and not entry.get("verus_version"):
+            print("  Verifier:      (not recorded)", file=out)
         print("", file=out)
 
         for name, check in self.checks.items():
@@ -375,6 +381,8 @@ def extract_taxonomy(
 
     counter: Counter[str] = Counter()
     for item in items:
+        if not isinstance(item, dict):
+            continue
         labels = item.get("spec-labels") or []
         counter.update(labels)
 

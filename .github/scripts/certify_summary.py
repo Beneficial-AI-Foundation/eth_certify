@@ -28,8 +28,18 @@ def verification_summary(args: argparse.Namespace) -> str:
         f"- **Commit**: `{args.commit}`",
         f"- **Verified**: {args.verified} / {args.total}",
     ]
+    lean_version = getattr(args, "lean_version", "")
+    sorry_count = getattr(args, "sorry_count", "")
+
+    if lean_version:
+        lines.append(f"- **Lean Version**: {lean_version}")
+    if sorry_count and sorry_count != "0":
+        lines.append(f"- **Contains sorry**: {sorry_count} declarations")
     if args.specs:
-        lines.append("- **Specs**: Extracted (Merkle certification)")
+        if lean_version:
+            lines.append("- **Functions Mapping**: Extracted (Merkle certification)")
+        else:
+            lines.append("- **Specs**: Extracted (Merkle certification)")
     if args.proof_bundle:
         lines.append("- **Proof Certificates**: Generated (Z3 formulas + proofs archived)")
     if args.taxonomy:
@@ -73,6 +83,8 @@ def main() -> None:
     parser.add_argument("--specs", action="store_true")
     parser.add_argument("--proof-bundle", action="store_true")
     parser.add_argument("--taxonomy", default="")
+    parser.add_argument("--lean-version", default="")
+    parser.add_argument("--sorry-count", default="")
     parser.add_argument("--cert-id", default="")
     parser.add_argument("--tx-hash", default="")
     parser.add_argument("--etherscan-url", default="")

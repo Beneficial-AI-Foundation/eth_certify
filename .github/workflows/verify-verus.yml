@@ -1,4 +1,4 @@
-# Verify External Verus Projects (v2 — Python-backed)
+# Verify External Verus Projects (Python-backed)
 #
 # Uses certify_cli --json output piped through workflow helper scripts.
 # All business logic lives in certify_cli; scripts handle only:
@@ -14,7 +14,7 @@
 #   2. ON-CHAIN: Verifies content hash exists on blockchain
 #   3. FRESH VERIFICATION: Re-runs probe-verus extract and compares counts
 
-name: Verify Certification (v2)
+name: Verify Verus Certification
 
 on:
   workflow_dispatch:

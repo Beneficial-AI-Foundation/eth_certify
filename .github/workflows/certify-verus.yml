@@ -1,4 +1,4 @@
-# Certify External Verus Projects (v2 — Python-backed)
+# Certify External Verus Projects (Python-backed)
 #
 # Uses certify_cli --json output piped through workflow helper scripts.
 # All business logic lives in certify_cli; scripts handle only:
@@ -9,7 +9,7 @@
 # Legacy workflows (certify-external.yml, certify-external-extract.yml)
 # are gitignored local backups.
 
-name: Certify External Project (v2)
+name: Certify Verus Project
 
 on:
   workflow_dispatch:

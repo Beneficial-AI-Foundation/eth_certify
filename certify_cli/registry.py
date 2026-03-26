@@ -29,6 +29,7 @@ class CertificationEntry:
     specs_file: Optional[str] = None  # Archived specs file path
     proof_bundle: Optional[str] = None  # Archived proof bundle directory path
     proofs_hash: Optional[str] = None  # keccak256(proofs.json) — Merkle leaf
+    lean_version: Optional[str] = None
 
 
 @dataclass
@@ -59,6 +60,7 @@ def update_registry(
     specs_file: Optional[str] = None,
     proof_bundle_dir: Optional[str] = None,
     proofs_hash: Optional[str] = None,
+    lean_version: Optional[str] = None,
 ) -> RegistryUpdateResult:
     """
     Update the certification registry with a new certification.
@@ -183,6 +185,7 @@ def update_registry(
             specs_file=stored_specs_path,
             proof_bundle=stored_proof_bundle,
             proofs_hash=proofs_hash,
+            lean_version=lean_version,
         )
         _update_history(cert_dir, entry)
 
@@ -335,6 +338,8 @@ def _update_history(cert_dir: Path, entry: CertificationEntry) -> None:
         new_entry["proof_bundle"] = entry.proof_bundle
     if entry.proofs_hash:
         new_entry["proofs_hash"] = entry.proofs_hash
+    if entry.lean_version:
+        new_entry["lean_version"] = entry.lean_version
 
     history["certifications"].insert(0, new_entry)
 
@@ -351,8 +356,10 @@ def _create_readme(
     """Create README with badge instructions."""
     # Build toolchain info section
     toolchain_info = ""
-    if entry.verus_version or entry.rust_version:
+    if entry.verus_version or entry.rust_version or entry.lean_version:
         toolchain_info = "\n### Toolchain\n"
+        if entry.lean_version:
+            toolchain_info += f"- **Lean**: {entry.lean_version}\n"
         if entry.verus_version:
             toolchain_info += f"- **Verus**: {entry.verus_version}\n"
         if entry.rust_version:

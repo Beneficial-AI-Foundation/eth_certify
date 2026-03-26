@@ -43,7 +43,7 @@ def _get_event_signature() -> str:
 
 # Default values
 DEFAULT_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
-DEFAULT_CONTRACT_ADDRESS = "0x125721f8a45bbABC60aDbaaF102a94d9cae59238"
+DEFAULT_CONTRACT_ADDRESS = "0x7a1bdfE0F2F9B4110301371Fa26BB3a4719b2A9F"
 DEFAULT_BLOCK_LOOKBACK = 50000
 
 
@@ -176,7 +176,7 @@ def _print_certification(cert: OnChainCertification) -> None:
         try:
             dt = datetime.fromtimestamp(cert.timestamp)
             print(f"Timestamp:    {dt.strftime('%Y-%m-%d %H:%M:%S')}")
-        except (ValueError, OSError):
+        except (ValueError, OSError, OverflowError):
             print(f"Timestamp:    {cert.timestamp}")
 
     print(f"Block:        {cert.block_number}")
@@ -241,15 +241,18 @@ def _parse_logs(logs: str) -> Optional[OnChainCertification]:
     tx_match = re.search(r"transactionHash:\s*(0x[a-f0-9]+)", logs, re.IGNORECASE)
     tx_hash = tx_match.group(1) if tx_match else ""
 
-    # Extract timestamp from the ABI-encoded data.
-    # The data contains dynamic types (two strings) interleaved with static types.
-    # The last 32-byte word is always `timestamp` (uint256).
+    # Extract timestamp from ABI-encoded event data.
+    # Non-indexed params: (string identifier, bytes32 commitHash,
+    #   string description, uint8 schemaVersion, uint256 timestamp)
+    # ABI head layout: word0=str_offset, word1=commitHash, word2=str_offset,
+    #   word3=schemaVersion, word4=timestamp
     timestamp: Optional[int] = None
     data_match = re.search(r"data:\s*(0x[a-f0-9]+)", logs, re.IGNORECASE)
     if data_match:
         data_hex = data_match.group(1)[2:]  # strip 0x
-        if len(data_hex) >= 64:
-            timestamp_hex = data_hex[-64:]  # last 32-byte word = timestamp
+        # timestamp is word 4 (offset 128 bytes = 256 hex chars)
+        if len(data_hex) >= 320:
+            timestamp_hex = data_hex[256:320]
             try:
                 timestamp = int(timestamp_hex, 16)
             except ValueError:
@@ -379,7 +382,7 @@ def _print_certification_for_network(cert: OnChainCertification, network: str) -
         try:
             dt = datetime.fromtimestamp(cert.timestamp)
             print(f"Timestamp:    {dt.strftime('%Y-%m-%d %H:%M:%S')}")
-        except (ValueError, OSError):
+        except (ValueError, OSError, OverflowError):
             print(f"Timestamp:    {cert.timestamp}")
 
     print(f"Block:        {cert.block_number}")

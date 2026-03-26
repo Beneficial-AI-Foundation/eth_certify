@@ -258,6 +258,12 @@ def main() -> int:
         help="Rust toolchain version used",
     )
     registry_parser.add_argument(
+        "--lean-version",
+        type=str,
+        default=None,
+        help="Lean toolchain version used for verification",
+    )
+    registry_parser.add_argument(
         "--results-file",
         type=str,
         default=None,
@@ -475,7 +481,7 @@ def _handle_verify(args: argparse.Namespace) -> int:
         env = EnvConfig.load()
         rpc_url = rpc_url or env.sepolia_rpc_url
         contract = contract or env.certify_address
-    except FileNotFoundError:
+    except (ValueError, FileNotFoundError):
         pass  # .env is optional for verify
 
     certify_config = CertifyConfig.load()
@@ -506,10 +512,16 @@ def _handle_verify_hash(args: argparse.Namespace) -> int:
             )
 
     if not contract:
-        contract = os.getenv("CERTIFY_ADDRESS")
-        if not contract:
-            if network == "sepolia":
-                contract = "0x125721f8a45bbABC60aDbaaF102a94d9cae59238"
+        try:
+            env = EnvConfig.load()
+            if network == "mainnet":
+                contract = os.getenv("MAINNET_CERTIFY_ADDRESS") or env.certify_address
+            else:
+                contract = env.certify_address
+        except (ValueError, FileNotFoundError):
+            contract = os.getenv("CERTIFY_ADDRESS") or os.getenv(
+                "MAINNET_CERTIFY_ADDRESS"
+            )
 
     if not contract:
         print(f"Error: Contract address required for {network}", file=_sys.stderr)
@@ -600,6 +612,7 @@ def _handle_update_registry(args: argparse.Namespace) -> int:
         specs_file=args.specs_file,
         proof_bundle_dir=args.proof_bundle_dir,
         proofs_hash=args.proofs_hash,
+        lean_version=args.lean_version,
     )
     print(result.message)
     return 0 if result.success else 1

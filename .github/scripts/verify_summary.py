@@ -41,14 +41,23 @@ def build_summary(args: argparse.Namespace) -> str:
     ])
 
     # Certification record
+    lean_version = getattr(args, "lean_version", "")
+    verus_version = getattr(args, "verus_version", "")
+    sorry_count = getattr(args, "sorry_count", "")
+
     lines.extend([
         "### Certification Record",
         "| Property | Value |",
         "|----------|-------|",
         f"| Content Hash | `{args.content_hash}` |",
         f"| Certified Results | {args.verified} / {args.total} |",
-        f"| Verus Version | {args.verus_version} |",
     ])
+    if lean_version:
+        lines.append(f"| Lean Version | {lean_version} |")
+    if verus_version:
+        lines.append(f"| Verus Version | {verus_version} |")
+    if sorry_count and sorry_count != "0":
+        lines.append(f"| Contains sorry | {sorry_count} declarations |")
     if args.proof_bundle:
         lines.append(f"| Proof Bundle | `{args.proof_bundle}` |")
     if args.etherscan_url:
@@ -123,11 +132,15 @@ def build_summary(args: argparse.Namespace) -> str:
             "The certification is **authentic** and the code at this commit produces matching verification results.",
         ])
     elif stored_ok or onchain_ok:
+        if lean_version:
+            version_hint = "Lean version differences"
+        else:
+            version_hint = "Verus version differences"
         lines.extend([
             "### Verification Partial",
             "",
             "The certification record is **authentic** (matches on-chain), but fresh verification produced different counts.",
-            "This is likely due to Verus version differences between the original certification and this verification run.",
+            f"This is likely due to {version_hint} between the original certification and this verification run.",
         ])
     else:
         lines.extend([
@@ -150,7 +163,9 @@ def main() -> None:
     parser.add_argument("--content-hash", required=True)
     parser.add_argument("--verified", required=True)
     parser.add_argument("--total", required=True)
-    parser.add_argument("--verus-version", required=True)
+    parser.add_argument("--verus-version", default="")
+    parser.add_argument("--lean-version", default="")
+    parser.add_argument("--sorry-count", default="")
     parser.add_argument("--stored", required=True)
     parser.add_argument("--merkle", required=True)
     parser.add_argument("--proofs-check", required=True)
