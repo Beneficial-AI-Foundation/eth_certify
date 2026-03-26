@@ -100,9 +100,7 @@ jobs:
           echo "$HOME/.elan/bin" >> $GITHUB_PATH
 
       - name: Verify elan installation
-        run: |
-          elan --version
-          lean --version
+        run: elan --version
 
       - name: Cache Lean build
         uses: actions/cache@v4
