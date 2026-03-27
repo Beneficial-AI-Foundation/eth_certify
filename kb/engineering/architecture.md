@@ -47,6 +47,9 @@ GitHub Actions workflows that automate certification for external projects. Thre
 - `certify-aeneas.yml` — Certify Aeneas-translated Lean projects (2-leaf Merkle: atoms.json + functions.json)
 - `verify-aeneas.yml` — Verify Aeneas certifications
 
+**Manifest anchoring**:
+- `anchor-manifest.yml` — Anchor a probe-manifest JSON on-chain (1-leaf Merkle: keccak256 of the manifest file)
+
 **Infrastructure**:
 - `ci.yml` — Lint Python + build/test Solidity
 - `test.yml` — Python pytest suite + Foundry tests
@@ -55,6 +58,7 @@ Helper scripts in `.github/scripts/` handle only logic not in `certify_cli`:
 - `workflow_utils.py` — JSON-to-`GITHUB_OUTPUT` bridge, repo URL parsing
 - `resolve_extract.py` — Parse probe-verus extract output format
 - `resolve_lean_extract.py` — Parse probe-lean atoms.json: count verified/unverified atoms, extract Lean version
+- `resolve_manifest.py` — Download probe-manifest JSON from URL, parse project-prefixed metadata fields
 - `certify_summary.py` / `verify_summary.py` — `GITHUB_STEP_SUMMARY` markdown (supports both Verus and Lean version display)
 
 All business logic (hashing, verification, registry, proofs) stays in `certify_cli`.

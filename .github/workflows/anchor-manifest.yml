@@ -1,0 +1,194 @@
+# Anchor Manifest on Ethereum
+#
+# Downloads a probe-manifest JSON from a URL, hashes it (keccak256),
+# and certifies the hash on-chain. Parses manifest metadata to populate
+# the certification registry automatically.
+#
+# Uses certify_cli --json output piped through workflow helper scripts.
+# 1-leaf Merkle: content_hash = keccak256(manifest.json)
+
+name: Anchor Manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_url:
+        description: 'URL to the probe manifest JSON (e.g. https://verilib.org/.../manifest.json)'
+        required: true
+        type: string
+      network:
+        description: 'Ethereum network for certification'
+        required: false
+        default: 'mainnet'
+        type: choice
+        options:
+          - mainnet
+          - sepolia
+      description:
+        description: 'Override auto-generated description (optional)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  anchor-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout certify repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ═══════════════════════════════════════════════════════════════
+      # Common tooling
+      # ═══════════════════════════════════════════════════════════════
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install certify dependencies
+        run: uv sync
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 1: Fetch and parse manifest
+      # ═══════════════════════════════════════════════════════════════
+      - name: Fetch and parse manifest
+        id: manifest
+        run: |
+          python3 .github/scripts/resolve_manifest.py \
+            --url "${{ inputs.manifest_url }}" \
+            --output-dir ./output \
+            >> $GITHUB_OUTPUT
+
+      - name: Verification summary
+        run: |
+          python3 .github/scripts/certify_summary.py \
+            --phase verification \
+            --repo "${{ steps.manifest.outputs.repo_path }}" \
+            --ref "${{ steps.manifest.outputs.commit_sha }}" \
+            --commit "${{ steps.manifest.outputs.commit_sha }}" \
+            --verified "${{ steps.manifest.outputs.verified_count }}" \
+            --total "${{ steps.manifest.outputs.total_functions }}" \
+          >> $GITHUB_STEP_SUMMARY
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 2: Certify on Ethereum
+      # ═══════════════════════════════════════════════════════════════
+      - name: Certify on ${{ inputs.network }}
+        id: certify
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          MAINNET_PRIVATE_KEY: ${{ secrets.MAINNET_PRIVATE_KEY }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          CERTIFY_ADDRESS: ${{ inputs.network == 'mainnet' && vars.MAINNET_CERTIFIER_ADDRESS || vars.SEPOLIA_CERTIFIER_ADDRESS }}
+        run: |
+          NETWORK="${{ inputs.network }}"
+          MANIFEST_FILE="${{ steps.manifest.outputs.manifest_file }}"
+          MANIFEST_URL="${{ inputs.manifest_url }}"
+          COMMIT_SHA="${{ steps.manifest.outputs.commit_sha }}"
+          REPO_PATH="${{ steps.manifest.outputs.repo_path }}"
+          VERIFIED="${{ steps.manifest.outputs.verified_count }}"
+          TOTAL="${{ steps.manifest.outputs.total_functions }}"
+
+          SAFE_ARGS=""
+          if [ "$NETWORK" = "mainnet" ]; then
+            SAFE_ADDR="${{ vars.MAINNET_SAFE_ADDRESS }}"
+            SAFE_ARGS="--safe $SAFE_ADDR --execute"
+          fi
+
+          # Auto-generate description unless overridden
+          DESCRIPTION="${{ inputs.description }}"
+          if [ -z "$DESCRIPTION" ]; then
+            DESCRIPTION="BAIF Anchor: ${REPO_PATH} - ${VERIFIED}/${TOTAL} verified"
+          fi
+
+          JSON_OUT=$(uv run python -m certify_cli certify \
+            --source "$MANIFEST_FILE" \
+            --identifier "$MANIFEST_URL" \
+            --description "$DESCRIPTION" \
+            --network "$NETWORK" \
+            --commit-sha "$COMMIT_SHA" \
+            $SAFE_ARGS \
+            --json)
+
+          echo "$JSON_OUT" | python3 .github/scripts/workflow_utils.py json-to-output \
+            tx_hash content_hash results_hash specs_hash etherscan_url \
+          >> $GITHUB_OUTPUT
+
+          TX_HASH=$(echo "$JSON_OUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tx_hash',''))")
+          if [ -z "$TX_HASH" ] || [ "$TX_HASH" = "None" ]; then
+            echo "::error::Certification failed - no transaction hash"
+            exit 1
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 3: Update Certification Registry
+      # ═══════════════════════════════════════════════════════════════
+      - name: Update certification registry
+        run: |
+          CONTENT_HASH="${{ steps.certify.outputs.content_hash }}"
+          MANIFEST_FILE="${{ steps.manifest.outputs.manifest_file }}"
+          VERUS_VERSION="${{ steps.manifest.outputs.verus_version }}"
+
+          CMD="uv run python -m certify_cli update-registry"
+          CMD="$CMD --cert-id \"${{ steps.manifest.outputs.cert_id }}\""
+          CMD="$CMD --repo \"${{ steps.manifest.outputs.repo_path }}\""
+          CMD="$CMD --ref \"${{ steps.manifest.outputs.commit_sha }}\""
+          CMD="$CMD --network \"${{ inputs.network }}\""
+          CMD="$CMD --verified \"${{ steps.manifest.outputs.verified_count }}\""
+          CMD="$CMD --total \"${{ steps.manifest.outputs.total_functions }}\""
+          CMD="$CMD --tx-hash \"${{ steps.certify.outputs.tx_hash }}\""
+          CMD="$CMD --content-hash \"$CONTENT_HASH\""
+          CMD="$CMD --commit-sha \"${{ steps.manifest.outputs.commit_sha }}\""
+
+          if [ -n "$VERUS_VERSION" ]; then
+            CMD="$CMD --verus-version \"$VERUS_VERSION\""
+          fi
+          if [ -n "$MANIFEST_FILE" ] && [ -f "$MANIFEST_FILE" ]; then
+            CMD="$CMD --results-file \"$MANIFEST_FILE\""
+          fi
+
+          # 1-leaf cert: results_hash = content_hash
+          CMD="$CMD --results-hash \"$CONTENT_HASH\""
+
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Commit certification
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add certifications/
+
+          if ! git diff --cached --quiet; then
+            git commit -m "anchor: ${{ steps.manifest.outputs.repo_path }} (${{ steps.manifest.outputs.verified_count }}/${{ steps.manifest.outputs.total_functions }})"
+            git push
+            echo "Certification committed"
+          else
+            echo "No changes to commit"
+          fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # STEP 4: Summary
+      # ═══════════════════════════════════════════════════════════════
+      - name: Final summary
+        run: |
+          python3 .github/scripts/certify_summary.py \
+            --phase final \
+            --repo "${{ steps.manifest.outputs.repo_path }}" \
+            --cert-id "${{ steps.manifest.outputs.cert_id }}" \
+            --tx-hash "${{ steps.certify.outputs.tx_hash }}" \
+            --etherscan-url "${{ steps.certify.outputs.etherscan_url }}" \
+          >> $GITHUB_STEP_SUMMARY

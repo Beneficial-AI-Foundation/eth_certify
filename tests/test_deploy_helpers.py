@@ -1,4 +1,5 @@
-"""P4: Commit binding (zero-padding) and P7: Key confidentiality (static check).
+"""P4: Commit binding (zero-padding), P7: Key confidentiality (static check),
+and identifier override tests.
 
 P4 partial: unit-tests the commit hash zero-padding logic that converts
 a hex SHA-1 to a bytes32 value for on-chain storage.
@@ -10,6 +11,7 @@ private keys via CLI arguments.
 import ast
 import inspect
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 class TestCommitHashZeroPadding:
@@ -112,3 +114,57 @@ class TestKeyConfidentiality:
         ]
         non_comment_source = "\n".join(non_comment_lines)
         assert "--private-key" not in non_comment_source
+
+
+class TestIdentifierOverride:
+    """The --identifier flag makes the on-chain identifier differ from --source."""
+
+    @patch("certify_cli.deploy.run_forge")
+    def test_identifier_used_as_on_chain_id(self, mock_forge: MagicMock):
+        """When identifier is provided, it should appear in forge args instead of source."""
+        from certify_cli.config import CertifyConfig, EnvConfig, Network
+        from certify_cli.deploy import certify_content
+
+        mock_forge.return_value = MagicMock(success=True)
+
+        env = MagicMock(spec=EnvConfig)
+        env.certify_address = "0x1234567890abcdef1234567890abcdef12345678"
+        env.get_private_key.return_value = "0xdeadbeef"
+        env.get_rpc_url.return_value = "http://localhost:8545"
+
+        config = CertifyConfig(source="/tmp/local.json", description="test")
+
+        with patch("certify_cli.deploy.compute_content_hash", return_value="0xhash"):
+            with patch("certify_cli.deploy._extract_tx_hash_from_broadcast", return_value="0xtx"):
+                result = certify_content(
+                    env, config, Network.ANVIL,
+                    identifier="https://example.com/manifest.json",
+                )
+
+        forge_args = mock_forge.call_args[0][0]
+        assert "https://example.com/manifest.json" in forge_args
+        assert "/tmp/local.json" not in forge_args
+        assert result.url == "https://example.com/manifest.json"
+
+    @patch("certify_cli.deploy.run_forge")
+    def test_source_used_when_no_identifier(self, mock_forge: MagicMock):
+        """When identifier is omitted, source should be the on-chain identifier."""
+        from certify_cli.config import CertifyConfig, EnvConfig, Network
+        from certify_cli.deploy import certify_content
+
+        mock_forge.return_value = MagicMock(success=True)
+
+        env = MagicMock(spec=EnvConfig)
+        env.certify_address = "0x1234567890abcdef1234567890abcdef12345678"
+        env.get_private_key.return_value = "0xdeadbeef"
+        env.get_rpc_url.return_value = "http://localhost:8545"
+
+        config = CertifyConfig(source="https://example.com/results.json", description="test")
+
+        with patch("certify_cli.deploy.compute_content_hash", return_value="0xhash"):
+            with patch("certify_cli.deploy._extract_tx_hash_from_broadcast", return_value="0xtx"):
+                result = certify_content(env, config, Network.ANVIL)
+
+        forge_args = mock_forge.call_args[0][0]
+        assert "https://example.com/results.json" in forge_args
+        assert result.url == "https://example.com/results.json"

@@ -4,6 +4,7 @@ import hashlib
 import json
 import sys
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -372,6 +373,7 @@ def extract_taxonomy(
     specs = unwrap_envelope(json.loads(full_specs.read_text()))
 
     # specs may be a dict keyed by probe-name (v1.x+) or a list of entries
+    items: Iterable[Any]
     if isinstance(specs, dict):
         items = specs.values()
     elif isinstance(specs, list):

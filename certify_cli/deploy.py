@@ -64,12 +64,12 @@ def deploy_contract(
 
     # Pass private key via environment variable (not CLI arg) to avoid
     # leaking it in the process list (/proc/<pid>/cmdline).
-    result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
+    forge_result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
 
-    if not result.success:
+    if not forge_result.success:
         return DeployResult(
             success=False,
-            message=f"❌ Deploy failed:\n{result.stderr}",
+            message=f"❌ Deploy failed:\n{forge_result.stderr}",
         )
 
     # Note: Etherscan verification is done manually after deployment
@@ -113,6 +113,7 @@ def certify_content(
     safe_address: Optional[str] = None,
     safe_execute: bool = False,
     commit_hash: Optional[str] = None,
+    identifier: Optional[str] = None,
 ) -> CertifyResult:
     """Certify content (from URL or file) on-chain.
 
@@ -129,6 +130,11 @@ def certify_content(
 
     If safe_address is provided with safe_execute=True, programmatically
     signs and executes the transaction via the Safe.
+
+    Args:
+        identifier: On-chain identifier string. Defaults to ``source`` when
+            not provided.  Use this when ``source`` is a local file path but
+            the on-chain record should reference a public URL.
     """
     if not env.certify_address:
         raise ValueError(
@@ -137,6 +143,7 @@ def certify_content(
         )
 
     source = certify_config.source
+    on_chain_id = identifier or source
     results_hash: Optional[str] = None
     specs_hash: Optional[str] = None
 
@@ -169,6 +176,7 @@ def certify_content(
             content_hash=content_hash,
             execute=safe_execute,
             commit_hash=commit_hash or "",
+            identifier=on_chain_id,
         )
         result.results_hash = results_hash
         result.specs_hash = specs_hash
@@ -194,7 +202,7 @@ def certify_content(
         "--sig",
         "run(address,string,bytes32,bytes32,string)",
         env.certify_address,
-        source,
+        on_chain_id,
         content_hash,
         commit_bytes32,
         certify_config.description,
@@ -205,9 +213,9 @@ def certify_content(
 
     # Pass private key via environment variable (not CLI arg) to avoid
     # leaking it in the process list (/proc/<pid>/cmdline).
-    result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
+    forge_result = run_forge(args, env_extra={"ETH_PRIVATE_KEY": private_key})
 
-    if result.success:
+    if forge_result.success:
         tx_hash = _extract_tx_hash_from_broadcast(network)
         etherscan_url = _build_etherscan_url(network, tx_hash)
         tx_info = f"\n   Tx Hash: {tx_hash}" if tx_hash else ""
@@ -220,12 +228,12 @@ def certify_content(
 
         return CertifyResult(
             success=True,
-            url=source,
+            url=on_chain_id,
             content_hash=content_hash,
             contract_address=env.certify_address,
             message=(
                 f"✅ Content certified!\n"
-                f"   Source: {source}\n"
+                f"   Identifier: {on_chain_id}\n"
                 f"   Content Hash: {content_hash}\n"
                 f"   Contract: {env.certify_address}"
                 f"{merkle_info}"
@@ -238,10 +246,10 @@ def certify_content(
         )
     return CertifyResult(
         success=False,
-        url=source,
+        url=on_chain_id,
         content_hash=content_hash,
         contract_address=env.certify_address,
-        message=f"❌ Certification failed:\n{result.stderr}",
+        message=f"❌ Certification failed:\n{forge_result.stderr}",
     )
 
 
@@ -301,6 +309,7 @@ def _certify_via_safe(
     content_hash: str,
     execute: bool = False,
     commit_hash: str = "",
+    identifier: Optional[str] = None,
 ) -> CertifyResult:
     """Certify via Gnosis Safe.
 
@@ -308,26 +317,26 @@ def _certify_via_safe(
     Otherwise, generate transaction data for manual submission via Safe UI.
     """
     source = certify_config.source
+    on_chain_id = identifier or source
     description = certify_config.description
     contract_address = env.certify_address
 
     if not contract_address:
         return CertifyResult(
             success=False,
-            url=source,
+            url=on_chain_id,
             content_hash=content_hash,
             contract_address="",
             message="❌ CERTIFY_ADDRESS not set. Deploy the contract first or set the address.",
         )
 
     if execute:
-        # Programmatic execution via Safe SDK
         return _execute_safe_certification(
             env=env,
             network=network,
             safe_address=safe_address,
             contract_address=contract_address,
-            source=source,
+            identifier=on_chain_id,
             content_hash=content_hash,
             commit_hash=commit_hash,
             description=description,
@@ -345,7 +354,7 @@ def _certify_via_safe(
         [
             "calldata",
             "certify(string,bytes32,bytes32,string)",
-            source,
+            on_chain_id,
             content_hash,
             commit_hash_padded,
             description,
@@ -368,7 +377,7 @@ Contract:     {contract_address}
 Function:     certify(string,bytes32,bytes32,string)
 
 Parameters:
-  identifier:  {source}
+  identifier:  {on_chain_id}
   contentHash: {content_hash}
   commitHash:  {commit_hash_padded}
   description: {description}
@@ -392,7 +401,7 @@ TIP: Add --execute to run programmatically:
 
     return CertifyResult(
         success=True,
-        url=source,
+        url=on_chain_id,
         content_hash=content_hash,
         contract_address=contract_address,
         message=message,
@@ -404,7 +413,7 @@ def _execute_safe_certification(
     network: Network,
     safe_address: str,
     contract_address: str,
-    source: str,
+    identifier: str,
     content_hash: str,
     commit_hash: str,
     description: str,
@@ -414,19 +423,16 @@ def _execute_safe_certification(
 
     print(f"\nExecuting certification via Safe {safe_address}...")
 
-    # Get the private key for signing
     private_key = env.get_private_key(network)
     rpc_url = env.get_rpc_url(network)
 
-    # Encode the function call
     calldata = encode_certify_call(
-        identifier=source,
+        identifier=identifier,
         content_hash=content_hash,
         commit_hash=commit_hash,
         description=description,
     )
 
-    # Execute via Safe
     result = execute_safe_transaction(
         safe_address=safe_address,
         contract_address=contract_address,
@@ -440,12 +446,12 @@ def _execute_safe_certification(
         etherscan_url = _build_etherscan_url(network, result.tx_hash)
         return CertifyResult(
             success=True,
-            url=source,
+            url=identifier,
             content_hash=content_hash,
             contract_address=contract_address,
             message=(
                 f"✅ Content certified via Safe!\n"
-                f"   Source: {source}\n"
+                f"   Identifier: {identifier}\n"
                 f"   Content Hash: {content_hash}\n"
                 f"   Contract: {contract_address}\n"
                 f"   Safe: {safe_address}\n"
@@ -456,7 +462,7 @@ def _execute_safe_certification(
         )
     return CertifyResult(
         success=False,
-        url=source,
+        url=identifier,
         content_hash=content_hash,
         contract_address=contract_address,
         message=result.message,

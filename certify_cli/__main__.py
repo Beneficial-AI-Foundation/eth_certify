@@ -81,6 +81,14 @@ def main() -> int:
         help="Content source (overrides certify.conf CERTIFY_SOURCE)",
     )
     certify_parser.add_argument(
+        "--identifier",
+        type=str,
+        default=None,
+        metavar="STRING",
+        help="On-chain identifier string (defaults to --source value). "
+        "Use when --source is a local file but the identifier should be a URL.",
+    )
+    certify_parser.add_argument(
         "--description",
         type=str,
         default=None,
@@ -445,6 +453,7 @@ def _handle_certify(args: argparse.Namespace) -> int:
         safe_address=args.safe,
         safe_execute=args.execute,
         commit_hash=args.commit_sha,
+        identifier=args.identifier,
     )
 
     if args.output_json:

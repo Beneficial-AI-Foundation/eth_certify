@@ -144,8 +144,8 @@ def build_function_mapping(
         func_name = normalise_verus_name(verus_name)
         module = extract_module_from_verus_name(verus_name)
 
-        key = (module, func_name) if module else (None, func_name)
-        smt2_index[key] = (smt2_file, verus_name)
+        if module:
+            smt2_index[(module, func_name)] = (smt2_file, verus_name)
 
         if func_name not in func_name_index:
             func_name_index[func_name] = []
@@ -160,7 +160,7 @@ def build_function_mapping(
         matched = None
 
         # Try exact (module, func) match
-        if (module, func_name) in smt2_index:
+        if module and (module, func_name) in smt2_index:
             matched = smt2_index[(module, func_name)]
 
         # Fallback: match by func_name only (if unique)
