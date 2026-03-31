@@ -117,3 +117,47 @@ class TestResolve:
         assert "total_functions" not in outputs
         assert "verus_version" not in outputs
         assert outputs["commit_sha"] == "abc123"
+
+    def test_to_be_verified_fallback_for_total(self, tmp_path: Path):
+        """When verify_summary_from_extract is absent, to_be_verified is used."""
+        manifest = {
+            "project_repo": "https://github.com/org/proj",
+            "project_resolved_commit": "deadbeef",
+            "verified_functions_count": 1146,
+            "to_be_verified": 1146,
+        }
+        manifest_bytes = json.dumps(manifest).encode()
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = manifest_bytes
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            with patch("urllib.request.Request"):
+                outputs = _mod.resolve("https://example.com/m.json", str(tmp_path))
+
+        assert outputs["verified_count"] == "1146"
+        assert outputs["total_functions"] == "1146"
+
+    def test_verify_summary_takes_precedence_over_to_be_verified(self, tmp_path: Path):
+        """verify_summary_from_extract.total_functions wins over to_be_verified."""
+        manifest = {
+            "project_repo": "https://github.com/org/proj",
+            "project_resolved_commit": "deadbeef",
+            "verified_functions_count": 42,
+            "verify_summary_from_extract": {"total_functions": 50},
+            "to_be_verified": 999,
+        }
+        manifest_bytes = json.dumps(manifest).encode()
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = manifest_bytes
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            with patch("urllib.request.Request"):
+                outputs = _mod.resolve("https://example.com/m.json", str(tmp_path))
+
+        assert outputs["total_functions"] == "50"

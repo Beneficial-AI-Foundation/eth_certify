@@ -98,6 +98,8 @@ def resolve(manifest_url: str, output_dir: str) -> dict[str, str]:
         outputs["verified_count"] = str(verified)
 
     total = (manifest.get("verify_summary_from_extract") or {}).get("total_functions")
+    if total is None:
+        total = manifest.get("to_be_verified")
     if total is not None:
         outputs["total_functions"] = str(total)
 
