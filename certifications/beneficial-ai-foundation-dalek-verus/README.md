@@ -26,9 +26,9 @@ Add this to your project's README:
 - **Ref**: 4b4cb8789f0602d1f2fb5905ef732ad88fc10f11
 - **Commit**: [`4b4cb87`](https://github.com/Beneficial-AI-Foundation/dalek-verus/commit/4b4cb8789f0602d1f2fb5905ef732ad88fc10f11)
 - **Network**: sepolia
-- **Transaction**: [0xde69c15cb96bc4a304678ddb8e1528dee7f4a04ff7b075b6b51b622bd4ca6207](https://sepolia.etherscan.io/tx/0xde69c15cb96bc4a304678ddb8e1528dee7f4a04ff7b075b6b51b622bd4ca6207)
-- **Content Hash**: `0x37a1d01385a3a507421a3b3f36e565174734e1ca6ca3ef55465a4dff20ce1288`
-- **Results**: [results/2026-03-31T19-17-37Z.json](results/2026-03-31T19-17-37Z.json)
+- **Transaction**: [0x3560d2c33ccc5ffaa0b2e444b8b4c57ee2af25811bc3b39bdd97ae69d667ac3e](https://sepolia.etherscan.io/tx/0x3560d2c33ccc5ffaa0b2e444b8b4c57ee2af25811bc3b39bdd97ae69d667ac3e)
+- **Content Hash**: `0x64bd386498ff32512c734aa9100bd20a158c0e1d1418d65a8334f1924cbfc72b`
+- **Results**: [results/2026-04-02T09-04-01Z.json](results/2026-04-02T09-04-01Z.json)
 
 ### Toolchain
 - **Verus**: 4.0.0
